@@ -1,2 +1,4 @@
 # pySpider
-Spiders build in python
+
+## 177
+直接命令行运行，后面加漫画首页作为根路径即可。
