@@ -14,26 +14,39 @@ headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) '
            'Chrome/56.0.2924.87 Safari/537.36'}
 
 base_url = 'https://qqh225.com/luyilu/2018/0813/5639.html'
-base_folder = "G:\\spider_downloads\\"
+base_folder = "D:\\spider_downloads\\"
 
+pic_list = []
+article_title = ''
+label = '';
 def getPicUrl(url):
     response = requests.get(url)
 
     html = response.content
     pq_doc = pq(html)
 
-    items = pq_doc("img").items()
+    global article_title
+    if not article_title:
+        article_title = pq_doc(".article-title").html()
 
-    pic_list = []
-    lable = getLable(url)
-    print(lable)
+    items = pq_doc("img").items()
+    global label
+    if not label:
+        label = getLable(url)
+        print(label)
     for it in items:
         src = it.attr('src')
         if src.endswith('.jpg'):
-            res = re.search(lable, src)
+            res = re.search(label, src)
             if res:
-                print(src)
-    return pic_list
+                pic_list.append(src)
+
+    next_page = pq_doc(".next-page a").attr("href")
+    if next_page :
+        cache_array = url.split('/')
+        cache_array[len(cache_array) - 1] = next_page
+        next_url = "/".join(cache_array)
+        return getPicUrl(next_url)
 
 def download_pic(pic_urls, folder_name):
     d_folder = base_folder + folder_name
@@ -79,5 +92,9 @@ def getLable(url):
             month = mon_res.groupdict("mon").get('mon')
     return year[2:]+month
 getPicUrl(base_url)
+for ele in pic_list:
+    print(ele)
+
+print(article_title)
 
 
