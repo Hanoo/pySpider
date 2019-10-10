@@ -14,7 +14,7 @@ headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) '
 
 proxies = {'http': 'socks5://localhost:58080', 'https': 'socks5://localhost:58080'}
 
-base_url = 'http://www.177pic.info/html/2019/06/2946218.html'
+base_url = 'http://www.177pic.info/html/2019/09/311581.html'
 base_folder = "G:\\spider_downloads\\"
 
 if len(sys.argv) > 1:
@@ -86,8 +86,7 @@ def download_pic(pic_urls, folder_name):
                 code.write(r.content)
 
             print("Saving image " + pic_name + " success")
-
-        time.sleep(5)
+            time.sleep(1)
 
 
 def mkdir(path):
