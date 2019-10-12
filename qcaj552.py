@@ -18,7 +18,7 @@ base_folder = "D:\\spider_downloads\\"
 
 pic_list = []
 article_title = ''
-label = '';
+label = ''
 def getPicUrl(url):
     response = requests.get(url)
 
@@ -33,7 +33,7 @@ def getPicUrl(url):
     global label
     if not label:
         label = getLable(url)
-        print(label)
+        print("Got the lable" + label)
     for it in items:
         src = it.attr('src')
         if src.endswith('.jpg'):
@@ -42,32 +42,35 @@ def getPicUrl(url):
                 pic_list.append(src)
 
     next_page = pq_doc(".next-page a").attr("href")
-    if next_page :
+    if next_page:
         cache_array = url.split('/')
         cache_array[len(cache_array) - 1] = next_page
         next_url = "/".join(cache_array)
         return getPicUrl(next_url)
 
-def download_pic(pic_urls, folder_name):
-    d_folder = base_folder + folder_name
-    mkdir(d_folder)
+def download_pic():
     global finished_number
-    for pic in pic_urls:
-        cache_array = pic.split('/')
-        pic_name = cache_array[len(cache_array)-1]
+    if len(pic_list)>0:
+        d_folder = base_folder + article_title
+        mkdir(d_folder)
+        for pic in pic_list:
+            cache_array = pic.split('/')
+            pic_name = cache_array[len(cache_array)-1]
 
-        save_path = d_folder + "\\" + pic_name
-        if os.path.exists(save_path):
-            print("File: " + save_path + " exists.")
-            finished_number += 1
-        else:
-            r = requests.get(pic)
-            finished_number += 1
-            with open(save_path, "wb") as code:
-                code.write(r.content)
+            save_path = d_folder + "\\" + pic_name
+            if os.path.exists(save_path):
+                print("File: " + save_path + " exists.")
+                finished_number += 1
+            else:
+                r = requests.get(pic)
+                finished_number += 1
+                with open(save_path, "wb") as code:
+                    code.write(r.content)
 
-            print("Saving image " + pic_name + " success")
-            time.sleep(1)
+                print("Saving image " + pic_name + " success")
+                time.sleep(1)
+    else:
+        print("图片列表是空的，啥也干不了······")
 
 def mkdir(path):
     folder = os.path.exists(path)
@@ -84,11 +87,11 @@ def getLable(url):
     month = ''
     for ele in cache_array:
         year_res = re.search('(?P<year>20\d{2})', ele)
-        if year_res!=None:
+        if year_res:
             year = year_res.groupdict("year").get('year')
 
         mon_res = re.search('(?P<mon>[0-1][0-9][0-3][0-9])', ele)
-        if mon_res!=None:
+        if mon_res:
             month = mon_res.groupdict("mon").get('mon')
     return year[2:]+month
 getPicUrl(base_url)
@@ -97,4 +100,4 @@ for ele in pic_list:
 
 print(article_title)
 
-
+download_pic()
