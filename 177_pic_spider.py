@@ -14,8 +14,9 @@ headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) '
 
 proxies = {'http': 'socks5://localhost:58080', 'https': 'socks5://localhost:58080'}
 
-base_url = 'http://www.177pic.info/html/2019/09/311581.html'
-base_folder = "G:\\spider_downloads\\"
+base_url = 'http://www.177pic.info/html/2019/10/3182183.html'
+base_folder = "/home/cyanks/spider/"
+separator = "\\"
 
 if len(sys.argv) > 1:
     base_url = sys.argv[1]
@@ -75,7 +76,7 @@ def download_pic(pic_urls, folder_name):
         cache_array = pic.split('/')
         pic_name = cache_array[len(cache_array)-1]
 
-        save_path = d_folder + "\\" + pic_name
+        save_path = d_folder + separator + pic_name
         if os.path.exists(save_path):
             print("File: " + save_path + " exists.")
             finished_number += 1
@@ -98,8 +99,10 @@ def mkdir(path):
     else:
         print("---  There is this folder!  ---")
 
-
-start = time.clock()
+sysType = sys.platform[0:3]
+if sysType == "lin":
+    print("Current platform is " + sysType)
+    separator = "/"
 page_list = get_sub_url(base_url)
 page_list.insert(0, base_url)
 
@@ -123,8 +126,6 @@ while(finished_number<pic_number):
 
 
 print("Jobs done!")
-elapsed = (time.clock() - start)
-print("Time used:", elapsed)
 
 
 
