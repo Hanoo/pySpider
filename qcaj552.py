@@ -1,4 +1,5 @@
 #!/usr/bin/python
+#encoding=utf-8
 
 import requests
 from pyquery import PyQuery as pq
@@ -7,14 +8,15 @@ import os
 import sys
 import re
 
+separator = "\\"
 headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) '
 
            'AppleWebKit/537.36 (KHTML, like Gecko) '
 
            'Chrome/56.0.2924.87 Safari/537.36'}
 
-base_url = 'https://qqh225.com/luyilu/2018/0813/5639.html'
-base_folder = "D:\\spider_downloads\\"
+base_url = 'https://qqd99.com/luyilu/2019/1113/7932.html'
+base_folder = "/home/cyanks/Downloads/spider"
 
 pic_list = []
 article_title = ''
@@ -33,7 +35,7 @@ def getPicUrl(url):
     global label
     if not label:
         label = getLable(url)
-        print("Got the lable" + label)
+        print("Got the lable: " + label)
     for it in items:
         src = it.attr('src')
         if src.endswith('.jpg'):
@@ -57,7 +59,7 @@ def download_pic():
             cache_array = pic.split('/')
             pic_name = cache_array[len(cache_array)-1]
 
-            save_path = d_folder + "\\" + pic_name
+            save_path = d_folder + separator + pic_name
             if os.path.exists(save_path):
                 print("File: " + save_path + " exists.")
                 finished_number += 1
@@ -70,7 +72,7 @@ def download_pic():
                 print("Saving image " + pic_name + " success")
                 time.sleep(1)
     else:
-        print("图片列表是空的，啥也干不了······")
+        print(" ")
 
 def mkdir(path):
     folder = os.path.exists(path)
@@ -94,6 +96,12 @@ def getLable(url):
         if mon_res:
             month = mon_res.groupdict("mon").get('mon')
     return year[2:]+month
+
+sysType = sys.platform[0:3]
+if sysType == "lin":
+    print("Current platform is " + sysType)
+    separator = "/"
+
 getPicUrl(base_url)
 for ele in pic_list:
     print(ele)
