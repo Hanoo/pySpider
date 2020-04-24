@@ -59,7 +59,7 @@ def filter_dup_partition_by_url(data_in_list):
     return i_data_list
 
 
-def test_select(data_in_list) :
+def select_partition() :
     conn = pymysql.connect(
         host='127.0.0.1',
         port=3306,
@@ -69,13 +69,11 @@ def test_select(data_in_list) :
         charset='utf8mb4'
     )
 
-    data = data_in_list[0][1]
-    print (data)
     # 获取游标
     cursor = conn.cursor()
 
     # 执行sql语句
-    cursor.execute('select count(id) from partitions')
+    cursor.execute('select * from partitions')
 
     # 提交
     conn.commit()
@@ -85,7 +83,11 @@ def test_select(data_in_list) :
 
     # 关闭连接
     conn.close()
-    print(cursor.fetchone()[0])
+    partitions = cursor.fetchall()
+    urls = []
+    for partition in partitions:
+        urls.append(partition[2])
+    return urls
 
 
 def insert_partition():
@@ -116,10 +118,35 @@ def insert_partition():
     conn.close()
     print (rows)
 
+def insert_community(commu_list):
+    conn = pymysql.connect(
+        host='127.0.0.1',
+        port=3306,
+        user='root',
+        password='mysql',
+        db='lianjia',
+        charset='utf8mb4'
+    )
 
+    # 获取游标
+    cursor = conn.cursor()
 
-list1 = [('安定门', '/chengjiao/andingmen/'), ('安贞', '/chengjiao/anzhen1/'), ('朝阳门内', '/chengjiao/chaoyangmennei1/')]
+    # 执行sql语句
+    sql = 'INSERT INTO community (d_name_py, c_name) VALUES (%s,%s)'
+    rows = cursor.executemany(sql, commu_list)
+
+    # 提交
+    conn.commit()
+
+    # 关闭游标
+    cursor.close()
+
+    # 关闭连接
+    conn.close()
+    print(rows)
+
+# list1 = [('安定门', '/chengjiao/andingmen/'), ('安贞', '/chengjiao/anzhen1/'), ('朝阳门内', '/chengjiao/chaoyangmennei1/')]
 # insert_batch_partition(list1)
 # insert_partition()
 # filter_dup_partition_by_url(list1)
-test_select(list1)
+select_partition()
