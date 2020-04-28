@@ -73,7 +73,7 @@ def select_partition() :
     cursor = conn.cursor()
 
     # 执行sql语句
-    cursor.execute('select * from partitions')
+    cursor.execute('select * from partitions where id>121')
 
     # 提交
     conn.commit()
@@ -145,8 +145,53 @@ def insert_community(commu_list):
     conn.close()
     print(rows)
 
+
+def select_community(start, page):
+    conn = pymysql.connect(
+        host='127.0.0.1',
+        port=3306,
+        user='root',
+        password='mysql',
+        db='lianjia',
+        charset='utf8mb4'
+    )
+    cursor = conn.cursor()
+    sql = 'select * from community limit %d, %d' % (start, page)
+    cursor.execute(sql)
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return cursor.fetchall()
+
+
+def insert_batch_apartment(apartment_list):
+    if len(apartment_list)==0:
+        return
+    else:
+        conn = pymysql.connect(
+            host='127.0.0.1',
+            port=3306,
+            user='root',
+            password='mysql',
+            db='lianjia',
+            charset='utf8mb4'
+        )
+        cursor = conn.cursor()
+        sql = 'INSERT INTO apartment (detail_url, summary) VALUES (%s,%s)'
+        rows = cursor.executemany(sql, apartment_list)
+
+        # 提交
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return rows
+
+
 # list1 = [('安定门', '/chengjiao/andingmen/'), ('安贞', '/chengjiao/anzhen1/'), ('朝阳门内', '/chengjiao/chaoyangmennei1/')]
 # insert_batch_partition(list1)
 # insert_partition()
 # filter_dup_partition_by_url(list1)
-select_partition()
+test_list = [('https://bj.lianjia.com/chengjiao/101106420565.html', '上龙西里 3室1厅 80.47平米'), ('https://bj.lianjia.com/chengjiao/101101991957.html', '上龙西里 3室2厅 185.6平米')]
+# select_community(0, 10)
+insert_batch_apartment(test_list)
