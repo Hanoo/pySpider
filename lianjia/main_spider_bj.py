@@ -17,13 +17,12 @@ headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) '
 
 base_url = 'https://bj.lianjia.com/'
 districts = ['xicheng', 'chaoyang', 'haidian', 'fengtai', 'shijingshan', 'tongzhou', 'changping', 'daxing', 'yizhuangkaifaqu', 'shunyi', 'fangshan']
-# districts = ['dongcheng']
 offline = False
 
 
 def fetch_apartments():
-    start = 400
-    page_size = 50
+    start = 700
+    page_size = 100
     id_list = gen_apartment_url(start, page_size)
     for community_id in id_list:
         page = 1
@@ -197,10 +196,12 @@ def fetch_community_page(partition_id):
     mysql_fun_bj.insert_community(communities)
 
 start = time.time()
+print ('程序开始时间：%s' % time.strftime('%H:%M:%S',time.localtime(start)))
 # fetch_community_page("andingmen")
 # gen_apartment_url()
 # test_py()
 # fetch_apartment_detail('https://bj.lianjia.com/chengjiao/pg2rs上龙西里')
 fetch_apartments()
 end = time.time()
+print ('程序结束时间：%s' % time.strftime('%H:%M:%S',time.localtime(end)))
 print("The function run time is : %.03f seconds" % (end - start))

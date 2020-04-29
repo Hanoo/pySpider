@@ -14,7 +14,7 @@ def insert_batch_partition(data_in_list) :
     cursor = conn.cursor()
 
     # 执行sql语句
-    sql = 'INSERT INTO partitions (partition_name, partition_url) VALUES (%s,%s)'
+    sql = 'INSERT INTO partitions_bj (partition_name, partition_url) VALUES (%s,%s)'
     rows = cursor.executemany(sql, data_in_list)
 
     # 提交
@@ -47,7 +47,7 @@ def filter_dup_partition_by_url(data_in_list):
 
     for i in range(len(data_in_list)):
         ele = data_in_list[i]
-        cursor.execute('select count(id) from partitions where partition_url=\'%s\';' % ele[1])
+        cursor.execute('select count(id) from partitions_bj where partition_url=\'%s\';' % ele[1])
         conn.commit()
         count = cursor.fetchone()[0]
         if count==0:
@@ -73,7 +73,7 @@ def select_partition() :
     cursor = conn.cursor()
 
     # 执行sql语句
-    cursor.execute('select * from partitions where id>121')
+    cursor.execute('select * from partitions_bj where id>121')
 
     # 提交
     conn.commit()
@@ -105,7 +105,7 @@ def insert_partition():
     cursor = conn.cursor()
 
     # 执行sql语句
-    sql = 'INSERT INTO partitions (partition_name, partition_url) VALUES (%s,%s)'
+    sql = 'INSERT INTO partitions_bj (partition_name, partition_url) VALUES (%s,%s)'
     rows = cursor.execute(sql, ('4', 'qzcsbj4'))
 
     # 提交
@@ -132,7 +132,7 @@ def insert_community(commu_list):
     cursor = conn.cursor()
 
     # 执行sql语句
-    sql = 'INSERT INTO community (d_name_py, c_name) VALUES (%s,%s)'
+    sql = 'INSERT INTO community_bj (d_name_py, c_name) VALUES (%s,%s)'
     rows = cursor.executemany(sql, commu_list)
 
     # 提交
@@ -156,7 +156,7 @@ def select_community(start, page):
         charset='utf8mb4'
     )
     cursor = conn.cursor()
-    sql = 'select * from community limit %d, %d' % (start, page)
+    sql = 'select * from community_bj limit %d, %d' % (start, page)
     cursor.execute(sql)
     conn.commit()
     cursor.close()
@@ -178,7 +178,7 @@ def insert_batch_apartment(apartment_list):
             charset='utf8mb4'
         )
         cursor = conn.cursor()
-        sql = 'INSERT INTO apartment (detail_url, summary) VALUES (%s,%s)'
+        sql = 'INSERT INTO apartment_bj (detail_url, summary) VALUES (%s,%s)'
         rows = cursor.executemany(sql, apartment_list)
 
         # 提交
