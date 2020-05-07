@@ -2,7 +2,7 @@
 # encoding=utf-8
 
 import time
-
+import random
 import requests
 from pyquery import PyQuery as pq
 
@@ -44,15 +44,15 @@ def fetch_partition():
 
 # 在分区列表页抓取交易详情的链接
 def fetch_apartments():
-    start_index = 32
-    page_size = 8
+    start_index = 47
+    page_size = 7
     partition_list = mysql_fun_sz.select_partition(start_index, page_size)
     for partition in partition_list:
         page = 1
         while page<101:
             url = base_url + partition + 'pg%d' % page
             print ('当前处理页面的url：%s' % url)
-            url_mapping = fetch_apartment_detail(url, partition)
+            url_mapping = fetch_apartment_detail_url(url, partition)
             if len(url_mapping) > 0:
                 ret = mysql_fun_sz.insert_batch_apartment(url_mapping)
                 if ret<1:
@@ -66,7 +66,7 @@ def fetch_apartments():
 
 
 # 根据url获取当前页面的房屋详情页url
-def fetch_apartment_detail(url, partition_url):
+def fetch_apartment_detail_url(url, partition_url):
     html = requests.get(url).content
     pq_doc = pq(html)
     url_mapping = []
@@ -78,19 +78,97 @@ def fetch_apartment_detail(url, partition_url):
             tag_a = title('a')
             url = tag_a.attr('href')
             summary = tag_a.text()
-            url_mapping.append((url, summary, partition_url))
+            temp = summary.split(' ')
+            community_name = temp[0]
+            url_mapping.append((url, summary, partition_url, community_name))
 
     return url_mapping
 
+
 def fetch_apartment_info():
-    mysql_fun_sz.select_apartments()
+    # 从数据库取出成交详情
+    ret = mysql_fun_sz.select_apartments()
+    for apartment in ret:
+        apartment_id = apartment[0]
+        apartment_url = apartment[1]
+        ret = fetch_apartment_detail(apartment_url, apartment_id)
+        if ret>0:
+            sleep_sec = random.randint(3, 7)
+            print('我先休息%d秒再继续执行。' % sleep_sec)
+            time.sleep(sleep_sec)
+        else :
+            print ('有异常导致插入出错！')
+
+
+
+def fetch_apartment_detail(url, apartment_id):
+    html = requests.get(url).content
+    apartment_info_list = []
+    pq_doc = pq(html)
+
+    # 获取成交时间
+    house_title = pq_doc('.house-title')
+    chengjiaoshijian = house_title('span').text().split(' ')
+    apartment_info_list.append(chengjiaoshijian[0])
+
+    # 获取成交价格和均价
+    div_price = pq_doc('.price')
+    chengjiaojiage = div_price('.dealTotalPrice')('i').html()
+    pingjunjiage = div_price('b').text()
+    apartment_info_list.append(chengjiaojiage)
+    apartment_info_list.append(pingjunjiage)
+
+    # 获取挂牌价格和成交周期
+    div_msg = pq_doc('.msg')
+    spans = div_msg.items('span')
+    msg_list = []
+    for span in spans:
+        msg_list.append(span('label').text())
+    guapaijiage = msg_list[0]
+    chengjiaozhouqi = msg_list[1]
+    apartment_info_list.append(guapaijiage)
+    apartment_info_list.append(chengjiaozhouqi)
+
+    intro_content = pq_doc('.introContent')
+    base_info_list = intro_content('.base').items('li')
+    for base_info in base_info_list:
+        li_info = base_info.text()[4:]
+        if not li_info:
+            li_info = '暂无数据'
+        apartment_info_list.append(li_info)
+
+    trans_info_list = intro_content('.transaction').items('li')
+    for trans_info in trans_info_list:
+        li_info = trans_info.text()[4:]
+        if not li_info:
+            li_info = '暂无数据'
+        apartment_info_list.append(li_info)
+    apartment_info_list.append(apartment_id)
+
+    ret = mysql_fun_sz.update_apartment(tuple(apartment_info_list))
+
+    # 获取历史成交信息
+    chengjiao_records = pq_doc('.chengjiao_record').items('li')
+    chengjiao_record_count = len(pq_doc('.chengjiao_record').find('li'))
+    if chengjiao_record_count>0:
+        for chengjiao_record in chengjiao_records:
+            record_price = chengjiao_record('.record_price').text()
+            record_detail = chengjiao_record('.record_detail').text()
+
+            mysql_fun_sz.add_trans_record(apartment_id, record_price, record_detail)
+
+    return ret
+
+
 
 
 start = time.time()
 print ('程序开始时间：%s' % time.strftime('%H:%M:%S',time.localtime(start)))
-fetch_apartments()
-# dataes = fetch_apartment_detail('https://sz.lianjia.com/chengjiao/qianhai/pg87', '/chengjiao/qianhai/')
+# fetch_apartments()
+# fetch_apartment_detail('https://sz.lianjia.com/chengjiao/SZ0000851630.html', '/chengjiao/qianhai/')
 # mysql_fun_sz.insert_batch_apartment(dataes)
+# fetch_apartment_detail('https://sz.lianjia.com/chengjiao/105104068377.html', 43172)
+fetch_apartment_info()
 end = time.time()
 print ('程序结束时间：%s' % time.strftime('%H:%M:%S',time.localtime(end)))
 print("The function run time is : %.03f seconds" % (end - start))
