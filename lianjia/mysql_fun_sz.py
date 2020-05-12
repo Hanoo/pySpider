@@ -164,7 +164,7 @@ def insert_batch_apartment(apartment_list):
         conn.close()
         return rows
 
-def select_apartments():
+def select_apartments(page_size):
     conn = pymysql.connect(
         host='127.0.0.1',
         port=3306,
@@ -173,14 +173,34 @@ def select_apartments():
         db='lianjia',
         charset='utf8mb4'
     )
+    if page_size>1000:
+        page_size = 1000
     cursor = conn.cursor()
-    sql = 'select id, detail_url from apartment_sz where chengjiaoshijian is null limit 0, 1000'
+    sql = 'select id, detail_url from apartment_sz where chengjiaoshijian is null limit 0, %d' % page_size
     cursor.execute(sql)
     conn.commit()
     cursor.close()
     conn.close()
 
     return cursor.fetchall()
+
+
+def del_apartment_by_id(apartment_id):
+    conn = pymysql.connect(
+        host='127.0.0.1',
+        port=3306,
+        user='root',
+        password='mysql',
+        db='lianjia',
+        charset='utf8mb4'
+    )
+
+    cursor = conn.cursor()
+    sql = 'delete from apartment_sz where id=%d' % apartment_id
+    cursor.execute(sql)
+    conn.commit()
+    cursor.close()
+    conn.close()
 
 
 def update_apartment(param_data):

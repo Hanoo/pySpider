@@ -4,6 +4,7 @@
 import time
 import random
 import requests
+import traceback
 from pyquery import PyQuery as pq
 
 from lianjia import mysql_fun_sz
@@ -87,22 +88,28 @@ def fetch_apartment_detail_url(url, partition_url):
 
 def fetch_apartment_info():
     # 从数据库取出成交详情
-    ret = mysql_fun_sz.select_apartments()
+    ret = mysql_fun_sz.select_apartments(100)
+    pedometer = 1
     for apartment in ret:
         apartment_id = apartment[0]
         apartment_url = apartment[1]
         ret = fetch_apartment_detail(apartment_url, apartment_id)
         if ret>0:
-            sleep_sec = random.randint(3, 7)
-            print('我先休息%d秒再继续执行。' % sleep_sec)
+            sleep_sec = random.randint(3, 6)
             time.sleep(sleep_sec)
-        else :
+            # if sleep_sec == 3:
+            print ('当前执行条数：%d' % pedometer)
+            pedometer += 1
+        elif ret == -404 :
+            print ('页面内找不到交易历史，删除对应房屋信息：%d' % apartment_id)
+            mysql_fun_sz.del_apartment_by_id(apartment_id)
+        else:
             print ('有异常导致插入出错！')
 
 
 
 def fetch_apartment_detail(url, apartment_id):
-    html = requests.get(url).content
+    html = requests.get(url, timeout=15).content
     apartment_info_list = []
     pq_doc = pq(html)
 
@@ -124,6 +131,8 @@ def fetch_apartment_detail(url, apartment_id):
     msg_list = []
     for span in spans:
         msg_list.append(span('label').text())
+    if len(msg_list)<1:
+        return -404
     guapaijiage = msg_list[0]
     chengjiaozhouqi = msg_list[1]
     apartment_info_list.append(guapaijiage)
@@ -168,7 +177,27 @@ print ('程序开始时间：%s' % time.strftime('%H:%M:%S',time.localtime(start
 # fetch_apartment_detail('https://sz.lianjia.com/chengjiao/SZ0000851630.html', '/chengjiao/qianhai/')
 # mysql_fun_sz.insert_batch_apartment(dataes)
 # fetch_apartment_detail('https://sz.lianjia.com/chengjiao/105104068377.html', 43172)
-fetch_apartment_info()
+i = 1
+run_time = 0
+while run_time < 8:
+    try :
+        print('第%d轮执行' % i)
+        fetch_apartment_info()
+    except IndexError as ie:
+        traceback.print_exc()
+        break
+    except requests.exceptions.ConnectionError:
+        print ('遇到网络错误，再试一次。')
+        continue
+    except requests.exceptions.ReadTimeout:
+        print('网络超时，暂停一分钟')
+        time.sleep(60)
+    time.sleep(8)
+    print('一轮爬取结束，休息8秒。')
+    current = time.time()
+    print ('本轮执行时间：%.01f' % (current-start))
+    run_time = (current - start)/3600
+    i += 1
 end = time.time()
 print ('程序结束时间：%s' % time.strftime('%H:%M:%S',time.localtime(end)))
-print("The function run time is : %.03f seconds" % (end - start))
+print("The function running time is : %.03f seconds" % (end - start))
