@@ -100,11 +100,11 @@ def fetch_apartment_info():
             # if sleep_sec == 3:
             print ('当前执行条数：%d' % pedometer)
             pedometer += 1
-        elif ret == -404 :
+        elif ret == -1024 :
             print ('页面内找不到交易历史，删除对应房屋信息：%d' % apartment_id)
             mysql_fun_sz.del_apartment_by_id(apartment_id)
         else:
-            print ('有异常导致插入出错！')
+            print ('有异常导致插入出错！出错URL:%s' % apartment_url)
 
 
 
@@ -132,7 +132,13 @@ def fetch_apartment_detail(url, apartment_id):
     for span in spans:
         msg_list.append(span('label').text())
     if len(msg_list)<1:
-        return -404
+        detail_header = pq_doc('.sellDetailHeader')
+        title = detail_header('.main')
+        summary = title.text()
+        if summary.find('已下架')>0:
+            return -1024
+        else:
+            return -404
     guapaijiage = msg_list[0]
     chengjiaozhouqi = msg_list[1]
     apartment_info_list.append(guapaijiage)
@@ -176,10 +182,13 @@ print ('程序开始时间：%s' % time.strftime('%H:%M:%S',time.localtime(start
 # fetch_apartments()
 # fetch_apartment_detail('https://sz.lianjia.com/chengjiao/SZ0000851630.html', '/chengjiao/qianhai/')
 # mysql_fun_sz.insert_batch_apartment(dataes)
-# fetch_apartment_detail('https://sz.lianjia.com/chengjiao/105104068377.html', 43172)
+# ret = fetch_apartment_detail('https://sz.lianjia.com/chengjiao/105103449633.html', 43172)
+# print(ret)
+
+
 i = 1
 run_time = 0
-while run_time < 8:
+while run_time < 9:
     try :
         print('第%d轮执行' % i)
         fetch_apartment_info()
