@@ -86,26 +86,27 @@ def fetch_apartment_detail_url(url, partition_url):
     return url_mapping
 
 
-def fetch_apartment_info():
+# 顺序执行还是逆序执行
+# 执行时ID的极值
+def fetch_apartment_info(reverse, max_id):
     # 从数据库取出成交详情
-    ret = mysql_fun_sz.select_apartments(100)
+    ret = mysql_fun_sz.select_apartments(reverse, max_id, 100)
     pedometer = 1
     for apartment in ret:
         apartment_id = apartment[0]
         apartment_url = apartment[1]
         ret = fetch_apartment_detail(apartment_url, apartment_id)
-        if ret>0:
+        if ret > 0:
             sleep_sec = random.randint(3, 6)
             time.sleep(sleep_sec)
             # if sleep_sec == 3:
-            print ('当前执行条数：%d' % pedometer)
+            print('当前执行记录ID：%d' % apartment_id)
             pedometer += 1
-        elif ret == -1024 :
-            print ('页面内找不到交易历史，删除对应房屋信息：%d' % apartment_id)
+        elif ret == -1024:
+            print('页面内找不到交易历史，删除对应房屋信息：%d' % apartment_id)
             mysql_fun_sz.del_apartment_by_id(apartment_id)
         else:
-            print ('有异常导致插入出错！出错URL:%s' % apartment_url)
-
+            print('有异常导致插入出错！出错URL:%s' % apartment_url)
 
 
 def fetch_apartment_detail(url, apartment_id):
@@ -175,8 +176,6 @@ def fetch_apartment_detail(url, apartment_id):
     return ret
 
 
-
-
 start = time.time()
 print ('程序开始时间：%s' % time.strftime('%H:%M:%S',time.localtime(start)))
 # fetch_apartments()
@@ -188,10 +187,10 @@ print ('程序开始时间：%s' % time.strftime('%H:%M:%S',time.localtime(start
 
 i = 1
 run_time = 0
-while run_time < 9:
-    try :
+while run_time < 1:
+    try:
         print('第%d轮执行' % i)
-        fetch_apartment_info()
+        fetch_apartment_info(True, 95434)
     except IndexError as ie:
         traceback.print_exc()
         break
@@ -208,5 +207,5 @@ while run_time < 9:
     run_time = (current - start)/3600
     i += 1
 end = time.time()
-print ('程序结束时间：%s' % time.strftime('%H:%M:%S',time.localtime(end)))
+print ('程序结束时间：%s' % time.strftime('%H:%M:%S', time.localtime(end)))
 print("The function running time is : %.03f seconds" % (end - start))
