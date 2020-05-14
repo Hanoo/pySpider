@@ -14,3 +14,5 @@ out
 *.swp
 dist/*
 venv/*
+*.pyc
+__pycache__

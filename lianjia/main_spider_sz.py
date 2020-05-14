@@ -18,6 +18,7 @@ headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) '
 
 base_url = 'https://sz.lianjia.com'
 districts = ['futianqu', 'nanshanqu', 'baoanqu', 'guangmingqu', 'longhuaqu'] # 福田区， 南山区， 宝安区， 光明区， 龙华区
+proxies = {'http': 'http://118.190.104.85:12306', 'https': 'https://118.190.104.85:12306'}
 
 
 # 在二手房成交首页爬取分片信息并存入数据库
@@ -176,36 +177,34 @@ def fetch_apartment_detail(url, apartment_id):
     return ret
 
 
-start = time.time()
-print ('程序开始时间：%s' % time.strftime('%H:%M:%S',time.localtime(start)))
-# fetch_apartments()
-# fetch_apartment_detail('https://sz.lianjia.com/chengjiao/SZ0000851630.html', '/chengjiao/qianhai/')
-# mysql_fun_sz.insert_batch_apartment(dataes)
-# ret = fetch_apartment_detail('https://sz.lianjia.com/chengjiao/105103449633.html', 43172)
-# print(ret)
+def batch_fetch_and_update_apartment():
+    start = time.time()
+    i = 1
+    run_time = 0
+    while run_time < 1:
+        try:
+            print('第%d轮执行' % i)
+            fetch_apartment_info(False, 99000)
+        except IndexError:
+            traceback.print_exc()
+            break
+        except requests.exceptions.ConnectionError:
+            print('遇到网络错误，再试一次。')
+            continue
+        except requests.exceptions.ReadTimeout:
+            print('网络超时，暂停一分钟')
+            time.sleep(60)
+        time.sleep(8)
+        print('一轮爬取结束，休息8秒。')
+        current = time.time()
+        print('本轮执行时间：%.01f' % (current - start))
+        run_time = (current - start) / 3600
+        i += 1
+    end = time.time()
+    print('程序结束时间：%s' % time.strftime('%H:%M:%S', time.localtime(end)))
+    print("The function running time is : %.03f seconds" % (end - start))
+    print ('程序开始时间：%s' % time.strftime('%H:%M:%S',time.localtime(start)))
 
 
-i = 1
-run_time = 0
-while run_time < 1:
-    try:
-        print('第%d轮执行' % i)
-        fetch_apartment_info(True, 95434)
-    except IndexError as ie:
-        traceback.print_exc()
-        break
-    except requests.exceptions.ConnectionError:
-        print ('遇到网络错误，再试一次。')
-        continue
-    except requests.exceptions.ReadTimeout:
-        print('网络超时，暂停一分钟')
-        time.sleep(60)
-    time.sleep(8)
-    print('一轮爬取结束，休息8秒。')
-    current = time.time()
-    print ('本轮执行时间：%.01f' % (current-start))
-    run_time = (current - start)/3600
-    i += 1
-end = time.time()
-print ('程序结束时间：%s' % time.strftime('%H:%M:%S', time.localtime(end)))
-print("The function running time is : %.03f seconds" % (end - start))
+
+

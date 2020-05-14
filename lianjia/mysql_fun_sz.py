@@ -3,12 +3,16 @@
 
 import pymysql
 
-db_host = '10.10.66.102'
-db_port = 8306
-db_user = 'crosdev'
-db_password = 'crosdev'
+# db_host = '10.10.66.102'
+# db_port = 8306
+# db_user = 'crosdev'
+# db_password = 'crosdev'
 db_name = 'lianjia'
 db_charset = 'utf8mb4'
+db_host = '127.0.0.1'
+db_port = 3306
+db_user = 'root'
+db_password = 'mysql'
 
 
 # 批量插入分区
@@ -145,7 +149,7 @@ def select_apartments(reverse, max_id, page_size):
     if reverse:
         condition = ' and id>%d order by id desc ' % max_id
     else:
-        condition = ' id<=%d ' % max_id
+        condition = ' and id<=%d ' % max_id
     sql = 'select id, detail_url from apartment_sz ' \
           ' where chengjiaoshijian is null %s limit 0, %d' % (condition, page_size)
     cursor.execute(sql)
@@ -307,36 +311,37 @@ def select_trans_record_sz_by_apartment_id(apartment_id):
 
 
 def etl():
-    conn = pymysql.connect(host=db_host, port=db_port, user=db_user,
-                           password=db_password, db=db_name, charset=db_charset)
+    conn = pymysql.connect(
+        host='10.10.66.102',
+        port=8306,
+        user='crosdev',
+        password='crosdev',
+        db=db_name,
+        charset=db_charset)
     cursor = conn.cursor()
-    condition = 'where id>%d' % 95434
+    condition = 'where id>%d' % 96558
     sql = 'select chengjiaoshijian, chengjiaojiage, pingjunjiage, guapaijiage, chengjiaozhouqi, fangwuhuxing, ' \
           'suozailouceng, jianzhumianji, huxingjiegou, taoneimianji, jianzhuleixing, fangwuchaoxiang, jianchengniandai, ' \
-          'zhuangxiuqingkuang, jianzhujiegou, gongnuanfangshi, tihubili, peibeidianti=, lianjiabianhao, jiaoyiquanshu, ' \
+          'zhuangxiuqingkuang, jianzhujiegou, gongnuanfangshi, tihubili, peibeidianti, lianjiabianhao, jiaoyiquanshu, ' \
           'guapaishijian, fangwuyongtu, fangwunianxian, fangquansuoshu, id from apartment_sz %s' % condition
     cursor.execute(sql)
     conn.commit()
     cursor.close()
     conn.close()
-    data_list = cursor.fetchall()
+    data_list = list(cursor.fetchall())
+    # for apartment in data_list:
+    #     print(apartment)
 
-    conn = pymysql.connect(
-        host='127.0.0.1',
-        port=3306,
-        user='root',
-        password='mysql',
-        db=db_name,
-        charset=db_charset)
+    conn = pymysql.connect(host=db_host, port=db_port, user=db_user,
+                           password=db_password, db=db_name, charset=db_charset)
     cursor = conn.cursor()
-    sql = 'update apartment_sz set chengjiaoshijian=\'%s\', chengjiaojiage=\'%s\', pingjunjiage=\'%s\', guapaijiage=\'%s\', chengjiaozhouqi=\'%s\', fangwuhuxing=\'%s\', ' \
-          'suozailouceng=\'%s\', jianzhumianji=\'%s\', huxingjiegou=\'%s\', taoneimianji=\'%s\', jianzhuleixing=\'%s\', fangwuchaoxiang=\'%s\', jianchengniandai=\'%s\', ' \
-          'zhuangxiuqingkuang=\'%s\', jianzhujiegou=\'%s\', gongnuanfangshi=\'%s\', tihubili=\'%s\', peibeidianti=\'%s\', lianjiabianhao=\'%s\', jiaoyiquanshu=\'%s\', ' \
-          'guapaishijian=\'%s\', fangwuyongtu=\'%s\', fangwunianxian=\'%s\', fangquansuoshu=\'%s\' where id=%d' % param_data
+    sql = 'update apartment_sz set chengjiaoshijian=%s, chengjiaojiage=%s, pingjunjiage=%s, guapaijiage=%s, chengjiaozhouqi=%s, fangwuhuxing=%s, ' \
+          'suozailouceng=%s, jianzhumianji=%s, huxingjiegou=%s, taoneimianji=%s, jianzhuleixing=%s, fangwuchaoxiang=%s, jianchengniandai=%s, ' \
+          'zhuangxiuqingkuang=%s, jianzhujiegou=%s, gongnuanfangshi=%s, tihubili=%s, peibeidianti=%s, lianjiabianhao=%s, jiaoyiquanshu=%s, ' \
+          'guapaishijian=%s, fangwuyongtu=%s, fangwunianxian=%s, fangquansuoshu=%s where id=%s'
     cursor.executemany(sql, data_list)
     conn.commit()
     cursor.close()
     conn.close()
 
-# apartment_list = [('https://sz.lianjia.com/chengjiao/105104068377.html', '鹏盛村 1室1厅 38.82平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105103574778.html', '鹏益花园 1室0厅 37.49平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105103799369.html', '旭飞花园 1室1厅 35.68平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105103909332.html', '八卦岭宿舍 1室0厅 29.34平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105104045392.html', '翠馨居花园 1室0厅 31.45平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105103066384.html', '八卦岭宿舍 1室0厅 13.77平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105103717407.html', '八卦岭宿舍 4室1厅 71.26平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105103874567.html', '城市主场 1室1厅 44.75平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105103630990.html', '旭飞花园 1室1厅 26.42平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105103932380.html', '旭飞花园 1室0厅 21.04平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105103977059.html', '翠馨居花园 1室0厅 32.7平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105103704373.html', '旭飞花园 1室0厅 24.26平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105103817584.html', '鹏益花园 2室1厅 63.59平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105103879187.html', '旭飞花园 1室0厅 21.04平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105103894299.html', '先科机电大厦 1室0厅 38.86平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105103911249.html', '旭飞花园 1室0厅 21.04平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105103632514.html', '城市主场 1室0厅 35.25平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105103719547.html', '旭飞花园 1室1厅 28.61平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105103430579.html', '鹏盛村 1室0厅 38.82平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105103928216.html', '八卦岭宿舍 1室0厅 28.2平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105103887703.html', '八卦岭宿舍 1室0厅 28.01平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105103819833.html', '旭飞花园 1室0厅 22.06平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105103520952.html', '鹏盛村 1室0厅 39.52平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105103385899.html', '岭尚时代园 2室1厅 59平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105103742021.html', '翠馨居花园 1室0厅 30.46平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105103745834.html', '八卦岭宿舍 1室0厅 28.25平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105103727713.html', '翠馨居花园 1室0厅 32.9平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105103771230.html', '先科机电大厦 1室1厅 38.02平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105103243134.html', '城市主场 1室1厅 44.6平米', '/chengjiao/bagualing/'), ('https://sz.lianjia.com/chengjiao/105102932889.html', '鹏盛村 2室1厅 50.85平米', '/chengjiao/bagualing/')]
-# insert_batch_apartment(apartment_list)
+etl()
