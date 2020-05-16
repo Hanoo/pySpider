@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # encoding=utf-8
-
+import random
 import time
 
 import requests
@@ -15,36 +15,61 @@ headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) '
 
                          'Chrome/56.0.2924.87 Safari/537.36'}
 
-base_url = 'https://bj.lianjia.com/'
+base_url = 'https://bj.lianjia.com'
 districts = ['xicheng', 'chaoyang', 'haidian', 'fengtai', 'shijingshan', 'tongzhou', 'changping', 'daxing', 'yizhuangkaifaqu', 'shunyi', 'fangshan']
 offline = False
+proxies1 = {'http': 'http://118.190.104.85:12306', 'https': 'https://118.190.104.85:12306'}
+proxies2 = {'http': 'http://114.215.43.57:12306', 'https': 'https://114.215.43.57:12306'}
 
 
+# flag作为爬取状态标记，0代表失败，1代表成功，2代表小区没有成交记录，
 def fetch_apartments():
-    start = 700
-    page_size = 100
-    id_list = gen_apartment_url(start, page_size)
-    for community_id in id_list:
+    community_list = mysql_fun_bj.select_community_by_condition(' where direct_name=\'昌平\' and finished is null')
+    for community in community_list:
+        flag = 0
+        community_id = community[0]
+        direct_name = community[1]
+        partition_name = community[3]
+        community_name = community[5]
         page = 1
+        sleep_sec = random.randint(1, 3)
+        total_count = 0
         while page<101:
-            url = base_url + 'chengjiao/pg%drs%s' % (page, community_id)
-            print ('当前处理页面的url：%s' % url)
-            url_mapping = fetch_apartment_detail(url)
+            url = base_url + '/chengjiao/pg%drs%s' % (page, community_name)
+            url_mapping, total_count = fetch_apartment_detail(page%3, url, direct_name, partition_name, community_name)
             if len(url_mapping) > 0:
+                print ('当前处理页面的url：%s' % url)
                 ret = mysql_fun_bj.insert_batch_apartment(url_mapping)
                 if ret<1:
                     print ('写入程序出错！正在写入的小区id：%s' % community_id)
+                    flag = 0
+                else:
+                    flag = 1
                 page += 1
-                time.sleep(16)
+                time.sleep(sleep_sec)
             else:
-                print('本小区处理完成。')
-                time.sleep(5)
+                if page==1:
+                    print('%s一套交易都没有' % community_name)
+                    flag = 2
+                time.sleep(sleep_sec)
                 break
+        mysql_fun_bj.update_community_bj_for_finish(community_id, flag, total_count)
+        print('本小区处理完成。休息5秒')
+        time.sleep(5)
 
 
 # 根据url获取当前页面的房屋详情页url
-def fetch_apartment_detail(url):
-    html = requests.get(url).content
+def fetch_apartment_detail(switch, url, direct_name, partition_name, community_name):
+    if switch==0:
+        print('直接访问。')
+        html = requests.get(url).content
+    elif switch==1:
+        print('使用代理1进行访问。')
+        html = requests.get(url, proxies=proxies1).content
+    else:
+        print('使用代理2进行访问。')
+        html = requests.get(url, proxies=proxies2).content
+
     pq_doc = pq(html)
     url_mapping = []
     list_content = pq_doc('.listContent')
@@ -53,19 +78,13 @@ def fetch_apartment_detail(url):
         for info in infoes:
             title = info('.title')
             tag_a = title('a')
-            url = tag_a.attr('href')
+            detail_url = tag_a.attr('href')
             summary = tag_a.text()
-            url_mapping.append((url, summary))
+            url_mapping.append((detail_url, summary, direct_name, partition_name, community_name))
+    total_fl = pq_doc('.total')
+    inner_span = int(total_fl('span').text())
 
-    return url_mapping
-
-
-def gen_apartment_url(start, page_size):
-    communities = mysql_fun_bj.select_community(start, page_size)
-    id_list = []
-    for community in communities:
-        id_list.append(community[3])
-    return id_list
+    return url_mapping, inner_span
 
 
 def fetch_apartment_from_page(url):
@@ -140,7 +159,7 @@ def read_file():
 def fetch_partition():
     for district in districts:
         list1 = []
-        url = base_url + 'chengjiao/' + district
+        url = base_url + '/chengjiao/' + district
         if offline:
             html = read_file()
         else:
@@ -159,10 +178,12 @@ def fetch_partition():
             mysql_fun_bj.insert_batch_partition(ret)
         time.sleep(20)
 
+
 # 从数据库读取所有分片，循环获取小区名称
 def fetch_community():
-    partition_urls = mysql_fun_bj.select_partition()
-    for partition_url in partition_urls :
+    partition_list = mysql_fun_bj.select_partition()
+    for partition in partition_list :
+        partition_url = partition[2]
         partition_id = partition_url.split('/')[2]
         fetch_community_page(partition_id)
 
@@ -172,7 +193,7 @@ def fetch_community_page(partition_id):
     communities = []
     index = 1
     while True:
-        url = base_url + 'xiaoqu/' + partition_id + "/pg%d" % index
+        url = base_url + '/xiaoqu/' + partition_id + "/pg%d" % index
         print(url)
         if offline:
             html = read_file()
@@ -195,13 +216,41 @@ def fetch_community_page(partition_id):
             break
     mysql_fun_bj.insert_community(communities)
 
-start = time.time()
-print ('程序开始时间：%s' % time.strftime('%H:%M:%S',time.localtime(start)))
-# fetch_community_page("andingmen")
-# gen_apartment_url()
-# test_py()
-# fetch_apartment_detail('https://bj.lianjia.com/chengjiao/pg2rs上龙西里')
+
+def get_exactly_direct_name():
+    partition_list = mysql_fun_bj.select_partition(' where direct_name is null')
+    for partition in partition_list:
+        partition_id = partition[0]
+        partition_name = partition[1]
+        partition_url = base_url + partition[2]
+        pq_doc = pq(requests.get(partition_url).content)
+        position = pq_doc('.position')
+        data_role = position('[data-role="ershoufang"]')
+        selected = data_role('a.selected')
+        direct_url = str(selected.attr('href'))
+        direct_name = direct_url.replace('/', '').replace('chengjiao','')
+        print('%s片区的真实区县：%s' % (partition_name, direct_name))
+        ret = mysql_fun_bj.update_partition_bj(partition_id, direct_name)
+        if ret > 0:
+            print('%s片区的正确市区更新成功' % partition_name)
+        time.sleep(4)
+
+
+def update_community():
+    partition_list = mysql_fun_bj.select_partition('')
+    for partition in partition_list:
+        partition_name = partition[1]
+        partition_url = partition[2]
+        print(partition_url)
+        direct_name = partition[3]
+        partition_name_py = partition_url.replace('/', '').replace('chengjiao', '')
+        mysql_fun_bj.update_community_bj(partition_name_py, direct_name, partition_url, partition_name)
+
+
+start_time = time.time()
+print ('程序开始时间：%s' % time.strftime('%H:%M:%S',time.localtime(start_time)))
 fetch_apartments()
-end = time.time()
-print ('程序结束时间：%s' % time.strftime('%H:%M:%S',time.localtime(end)))
-print("The function run time is : %.03f seconds" % (end - start))
+# fetch_apartment_detail(0, 'https://bj.lianjia.com/chengjiao/rs%E8%BF%9C%E6%B4%8B%E6%96%B0%E5%B9%B2%E7%BA%BF/','','','')
+end_time = time.time()
+print('程序结束时间：%s' % time.strftime('%H:%M:%S', time.localtime(end_time)))
+print("程序耗时 : %.03f seconds" % (end_time - start_time))

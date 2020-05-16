@@ -273,6 +273,7 @@ def read_file():
         print ('打开文件失败！')
 
 
+# 根据片区进行连接查询，获取全部成交信息
 def select_apartments_by_direct(direct_name):
     conn = pymysql.connect(host=db_host, port=db_port, user=db_user,
                            password=db_password, db=db_name, charset=db_charset)
@@ -344,4 +345,24 @@ def etl():
     cursor.close()
     conn.close()
 
-etl()
+def etl_trans_records():
+    conn = pymysql.connect(
+        host='10.10.66.102',
+        port=8306,
+        user='crosdev',
+        password='crosdev',
+        db=db_name,
+        charset=db_charset)
+
+    cursor = conn.cursor()
+    condition = 'where apartment_id>%d' % 96558
+    sql = 'select apartment_id, record_price, record_detail, record_time from apartment_trans_record_sz %s' % condition
+
+    cursor.execute(sql)
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    trans_records = list(cursor.fetchall())
+    for record in trans_records:
+        add_trans_record(record[0],record[1],record[2])

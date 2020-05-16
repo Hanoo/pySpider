@@ -38,8 +38,9 @@ ws.write(0, 27, '历史成交价格')
 ws.write(0, 28, '成交时间')
 
 max_trans_time = 1
+partition_name = 'longhuaqu'
 
-data_list = mysql_fun_sz.select_apartments('futianqu')
+data_list = mysql_fun_sz.select_apartments_by_direct(partition_name)
 row_num = 1
 for apartment in data_list:
 
@@ -62,4 +63,4 @@ for apartment in data_list:
     row_num += 1
 
 # 保存excel文件
-wb.save('C:\\Users\\cyanks\\Desktop\\福田区.xls')
+wb.save('C:\\Users\\cyanks\\Desktop\\%s.xls' % partition_name)
