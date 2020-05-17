@@ -2,7 +2,7 @@
 # encoding=utf-8
 import random
 import time
-
+import traceback
 import requests
 from pyquery import PyQuery as pq
 
@@ -36,7 +36,7 @@ def fetch_apartments():
         total_count = 0
         while page<101:
             url = base_url + '/chengjiao/pg%drs%s' % (page, community_name)
-            url_mapping, total_count = fetch_apartment_detail(page%3, url, direct_name, partition_name, community_name)
+            url_mapping, total_count = fetch_apartment_detail_url(page % 3, url, direct_name, partition_name, community_name)
             if len(url_mapping) > 0:
                 print ('当前处理页面的url：%s' % url)
                 ret = mysql_fun_bj.insert_batch_apartment(url_mapping)
@@ -59,7 +59,7 @@ def fetch_apartments():
 
 
 # 根据url获取当前页面的房屋详情页url
-def fetch_apartment_detail(switch, url, direct_name, partition_name, community_name):
+def fetch_apartment_detail_url(switch, url, direct_name, partition_name, community_name):
     if switch==0:
         print('直接访问。')
         html = requests.get(url).content
@@ -87,60 +87,113 @@ def fetch_apartment_detail(switch, url, direct_name, partition_name, community_n
     return url_mapping, inner_span
 
 
-def fetch_apartment_from_page(url):
-
-    if offline:
-        html = read_file()
-    else:
-        html = requests.get(url).content
-    pq_doc = pq(html)
-    pq_doc.remove(".houseIcon")
-    pq_doc.remove(".positionIcon")
-    pq_doc.remove(".dealHouseIcon")
-    pq_doc.remove(".dealCycleIcon")
-    infoes = pq_doc(".info").items()
-
-    for item in infoes:
-        gaikuo = item(".title a").html().split(' ')  # 概括性描述
-        fangwumingcheng = gaikuo[0]
-        huxing = gaikuo[1]
-        mianji = gaikuo[2]
-        chaoxiangzhuangxiu = item(".houseInfo").html()  # 朝向 | 装修
-
-        nianxianditie = ''  # 年限和地铁相关信息
-        dealHouseTxt = item(".dealHouseTxt")
-        if dealHouseTxt:
-            dealHouseTxts = dealHouseTxt.find("span")
-            nianxianditie = dealHouseTxts.html()
-            iterator = dealHouseTxts.next()
-            if iterator:
-                nianxianditie = nianxianditie + " / " + iterator.html()
+def fetch_apartment_info(reverse):
+    # 从数据库取出成交详情
+    ret = mysql_fun_bj.select_apartments(reverse, '昌平', 100)
+    pedometer = 1
+    for apartment in ret:
+        apartment_id = apartment[0]
+        apartment_url = apartment[1]
+        ret = fetch_apartment_info_and_update(pedometer%3, apartment_url, apartment_id)
+        if ret > 0:
+            sleep_sec = random.randint(1, 3)
+            print('--- 休整%d秒 ---' % sleep_sec)
+            time.sleep(sleep_sec)
+            if sleep_sec == 1:
+                print('当前执行记录ID：%d' % apartment_id)
+        elif ret == -1024:
+            print('页面内找不到交易历史，删除对应房屋信息：%d' % apartment_id)
+            mysql_fun_bj.del_apartment_by_id(apartment_id)
         else:
-            print ('不存在')
+            print('有异常导致插入出错！出错URL:%s' % apartment_url)
+        pedometer += 1
 
-        guapaijiage = ''
-        chengjiaozhouqi = ''
-        dealCycleTxt = item(".dealCycleTxt")
-        if dealCycleTxt:
-            dealCycleTxts = dealCycleTxt.find("span")
-            guapaijiage = dealCycleTxts.html()
-            chengjiaozhouqi = dealCycleTxts.next().html()
 
-        chengjiaoshijian = item(".dealDate").html()
-        chengjiaojiage = item(".totalPrice").text()
-        pingjundanjia = item(".unitPrice").text()
+def fetch_apartment_info_and_update(switch, url, apartment_id):
+    if switch==0:
+        html = requests.get(url, timeout=15).content
+        print('***直接连接***')
+    elif switch==1:
+        html = requests.get(url, proxies=proxies1, timeout=15).content
+        print('***代理1***')
+    else:
+        html = requests.get(url, proxies=proxies2, timeout=15).content
+        print('***代理2***')
+    # html = requests.get(url, timeout=15).content
+    apartment_info_list = []
+    pq_doc = pq(html)
 
-        print ('房屋简介：%s' % fangwumingcheng)
-        print ('户型：%s' % huxing)
-        print ('面积：%s' % mianji)
-        print ('房屋朝向|装修描述：%s' % chaoxiangzhuangxiu)
-        print ('年限 / 地铁：%s' % nianxianditie)
-        print ('挂牌价格：%s' % guapaijiage)
-        print ('成交周期：%s' % chengjiaozhouqi)
-        print ('成交时间：%s' % chengjiaoshijian)
-        print ('成交价格：%s' % chengjiaojiage)
-        print ('平均单价：%s' % pingjundanjia)
-        print ('**********************************')
+    # 获取成交时间
+    house_title = pq_doc('.house-title')
+    chengjiaoshijian = house_title('span').text().split(' ')
+    apartment_info_list.append(chengjiaoshijian[0])
+
+    # 获取成交价格和均价
+    div_price = pq_doc('.price')
+    chengjiaojiage = div_price('.dealTotalPrice')('i').html()
+    pingjunjiage = div_price('b').text()
+    apartment_info_list.append(chengjiaojiage)
+    apartment_info_list.append(pingjunjiage)
+
+    # 获取挂牌价格和成交周期
+    div_msg = pq_doc('.msg')
+    spans = div_msg.items('span')
+    msg_list = []
+    for span in spans:
+        msg_list.append(span('label').text())
+    if len(msg_list)<1:
+        detail_header = pq_doc('.sellDetailHeader')
+        title = detail_header('.main')
+        summary = title.text()
+        if summary.find('已下架')>0:
+            return -1024
+        else:
+            return -404
+
+    guapaijiage = msg_list[0]
+    chengjiaozhouqi = msg_list[1]
+    apartment_info_list.append(guapaijiage)
+    apartment_info_list.append(chengjiaozhouqi)
+
+    intro_content = pq_doc('.introContent')
+    base_info_list = intro_content('.base').items('li')
+    for base_info in base_info_list:
+        li_info = base_info.text()[4:]
+        if not li_info:
+            li_info = '暂无数据'
+        apartment_info_list.append(li_info)
+
+    trans_info_list = intro_content('.transaction').items('li')
+    for trans_info in trans_info_list:
+        li_info = trans_info.text()[4:]
+        if not li_info:
+            li_info = '暂无数据'
+        apartment_info_list.append(li_info)
+    apartment_info_list.append(apartment_id)
+
+    # 获取历史成交信息
+    chengjiao_records = pq_doc('.chengjiao_record').items('li')
+    chengjiao_record_count = len(pq_doc('.chengjiao_record').find('li'))
+    if chengjiao_record_count>0:
+        trans_record_list = []
+        for chengjiao_record in chengjiao_records:
+            record_price = chengjiao_record('.record_price').text()
+            record_detail = chengjiao_record('.record_detail').text()
+            details = record_detail.split(',')
+            if len(details) == 2:
+                record_time = details[1].replace('成交', '')
+                price_per_sm = details[0].replace('单价', '').replace('元/平', '')
+                if price_per_sm == '--':
+                    price_per_sm = ''
+            else:
+                record_time = record_detail.replace('成交', '')
+                price_per_sm = ''
+            trans_record_list.append((apartment_id, record_price, record_detail, record_time, price_per_sm))
+
+        return mysql_fun_bj.update_apartment(tuple(apartment_info_list), trans_record_list)
+    else:
+        print('当前房屋没有成交历史，可能是下架的或者没卖掉。%s' % apartment_id)
+        return -404
 
 
 def read_file():
@@ -247,10 +300,33 @@ def update_community():
         mysql_fun_bj.update_community_bj(partition_name_py, direct_name, partition_url, partition_name)
 
 
-start_time = time.time()
-print ('程序开始时间：%s' % time.strftime('%H:%M:%S',time.localtime(start_time)))
-fetch_apartments()
-# fetch_apartment_detail(0, 'https://bj.lianjia.com/chengjiao/rs%E8%BF%9C%E6%B4%8B%E6%96%B0%E5%B9%B2%E7%BA%BF/','','','')
-end_time = time.time()
-print('程序结束时间：%s' % time.strftime('%H:%M:%S', time.localtime(end_time)))
-print("程序耗时 : %.03f seconds" % (end_time - start_time))
+def batch_fetch_and_update_apartment():
+    start = time.time()
+    i = 1
+    run_time = 0
+    while run_time < 9:
+        try:
+            print('第%d轮执行' % i)
+            fetch_apartment_info(False)
+        except IndexError:
+            traceback.print_exc()
+            break
+        except requests.exceptions.ConnectionError:
+            print('遇到网络错误，再试一次。')
+            continue
+        except requests.exceptions.ReadTimeout:
+            print('网络超时，暂停一分钟')
+            time.sleep(60)
+        print('一轮爬取结束，休息8秒。')
+        time.sleep(8)
+        current = time.time()
+        print('本轮执行时间：%.01f' % (current - start))
+        run_time = (current - start) / 3600
+        i += 1
+    end = time.time()
+    print('程序结束时间：%s' % time.strftime('%H:%M:%S', time.localtime(end)))
+    print("The function running time is : %.03f seconds" % (end - start))
+    print ('程序开始时间：%s' % time.strftime('%H:%M:%S',time.localtime(start)))
+
+
+batch_fetch_and_update_apartment()
