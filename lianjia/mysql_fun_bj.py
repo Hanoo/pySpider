@@ -199,7 +199,7 @@ def update_community_bj_for_finish(community_id, flag, total_count):
 
     return rows
 
-def select_apartments(reverse, direct_name, page_size):
+def select_apartments(reverse, direct_name, d_name_py, page_size):
     conn = pymysql.connect(host=db_host, port=db_port, user=db_user,
                            password=db_password, db=db_name, charset=db_charset)
     if page_size > 1000:
@@ -209,8 +209,8 @@ def select_apartments(reverse, direct_name, page_size):
     if reverse:
         condition += ' order by id desc '
 
-    sql = 'select id, detail_url from apartment_bj ' \
-          ' where chengjiaoshijian is null %s limit 0, %d' % (condition, page_size)
+    sql = 'select id, detail_url from apartment_bj_%s ' \
+          ' where chengjiaoshijian is null %s limit 0, %d' % (d_name_py, condition, page_size)
     cursor.execute(sql)
     conn.commit()
     cursor.close()
@@ -220,19 +220,21 @@ def select_apartments(reverse, direct_name, page_size):
 
 
 # 先更新主表，再更新从表，遇到错误回滚
-def update_apartment(apartment_info, trans_record_list):
+def update_apartment(d_name_py, apartment_info, trans_record_list):
     conn = pymysql.connect(host=db_host, port=db_port, user=db_user,
                            password=db_password, db=db_name, charset=db_charset)
     cursor = conn.cursor()
     try :
-        sql_update_apartment = 'update apartment_bj set chengjiaoshijian=\'%s\', chengjiaojiage=\'%s\', pingjunjiage=\'%s\', guapaijiage=\'%s\', chengjiaozhouqi=\'%s\', fangwuhuxing=\'%s\', ' \
+        sql_update_apartment = 'update apartment_bj_%s' % d_name_py
+        sql_update_apartment += ' set chengjiaoshijian=\'%s\', chengjiaojiage=\'%s\', pingjunjiage=\'%s\', guapaijiage=\'%s\', chengjiaozhouqi=\'%s\', fangwuhuxing=\'%s\', ' \
               'suozailouceng=\'%s\', jianzhumianji=\'%s\', huxingjiegou=\'%s\', taoneimianji=\'%s\', jianzhuleixing=\'%s\', fangwuchaoxiang=\'%s\', jianchengniandai=\'%s\', ' \
               'zhuangxiuqingkuang=\'%s\', jianzhujiegou=\'%s\', gongnuanfangshi=\'%s\', tihubili=\'%s\', peibeidianti=\'%s\', lianjiabianhao=\'%s\', jiaoyiquanshu=\'%s\', ' \
               'guapaishijian=\'%s\', fangwuyongtu=\'%s\', fangwunianxian=\'%s\', fangquansuoshu=\'%s\' where id=%d' % apartment_info
         cursor.execute(sql_update_apartment)
         conn.commit()
 
-        sql_add_trans_record = 'insert into apartment_trans_record_bj (apartment_id, record_price, record_detail, record_time, price_per_sm)' \
+        sql_add_trans_record = 'insert into apartment_trans_record_bj_%s' % d_name_py
+        sql_add_trans_record += ' (apartment_id, record_price, record_detail, record_time, price_per_sm)' \
               ' values (%s, %s, %s, %s, %s)'
         cursor.executemany(sql_add_trans_record, trans_record_list)
         conn.commit()
@@ -256,3 +258,57 @@ def del_apartment_by_id(apartment_id):
     conn.commit()
     cursor.close()
     conn.close()
+
+
+def etl(d_name_py):
+    conn_102 = pymysql.connect(
+        host='10.10.66.102',
+        port=8306,
+        user='crosdev',
+        password='crosdev',
+        db=db_name,
+        charset=db_charset)
+    cursor_102 = conn_102.cursor()
+
+    conn_local = pymysql.connect(host=db_host, port=db_port, user=db_user,
+                           password=db_password, db=db_name, charset=db_charset)
+    cursor_local = conn_local.cursor()
+
+    # 抽取远程库的交易详情
+    condition_apartment = 'where id>%d' % 423944
+    apartment_fetch_sql = 'select chengjiaoshijian, chengjiaojiage, pingjunjiage, guapaijiage, chengjiaozhouqi, fangwuhuxing, ' \
+          'suozailouceng, jianzhumianji, huxingjiegou, taoneimianji, jianzhuleixing, fangwuchaoxiang, jianchengniandai, ' \
+          'zhuangxiuqingkuang, jianzhujiegou, gongnuanfangshi, tihubili, peibeidianti, lianjiabianhao, jiaoyiquanshu, ' \
+          'guapaishijian, fangwuyongtu, fangwunianxian, fangquansuoshu, id from apartment_bj_%s %s' % (d_name_py, condition_apartment)
+    cursor_102.execute(apartment_fetch_sql)
+    conn_102.commit()
+    apartment_list = list(cursor_102.fetchall())
+    for apartment in apartment_list:
+        print(apartment)
+
+    # 交易详情写入本地库
+    sql_import = 'update apartment_bj_%s' % d_name_py
+    sql_import += ' set chengjiaoshijian=%s, chengjiaojiage=%s, pingjunjiage=%s, guapaijiage=%s, chengjiaozhouqi=%s, fangwuhuxing=%s, ' \
+          'suozailouceng=%s, jianzhumianji=%s, huxingjiegou=%s, taoneimianji=%s, jianzhuleixing=%s, fangwuchaoxiang=%s, jianchengniandai=%s, ' \
+          'zhuangxiuqingkuang=%s, jianzhujiegou=%s, gongnuanfangshi=%s, tihubili=%s, peibeidianti=%s, lianjiabianhao=%s, jiaoyiquanshu=%s, ' \
+          'guapaishijian=%s, fangwuyongtu=%s, fangwunianxian=%s, fangquansuoshu=%s where id=%s'
+    cursor_local.executemany(sql_import, apartment_list)
+    conn_local.commit()
+
+    # 抽取远程库中的交易记录数据
+    sql_fetch_records = 'select apartment_id, record_price, record_detail, record_time, price_per_sm from apartment_trans_record_bj_%s' % d_name_py
+    cursor_102.execute(sql_fetch_records)
+    trans_records = list(cursor_102.fetchall())
+
+    # 将交易记录写入本地库
+    sql_import_records = 'insert into apartment_trans_record_bj_%s ' % d_name_py
+    sql_import_records += ' (apartment_id, record_price, record_detail, record_time, price_per_sm)' \
+          ' values (%s, %s, %s, %s, %s)'
+    cursor_local.executemany(sql_import_records, trans_records)
+    conn_local.commit()
+
+    cursor_102.close()
+    conn_102.close()
+    cursor_local.close()
+    conn_local.close()
+
