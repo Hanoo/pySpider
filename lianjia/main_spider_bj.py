@@ -106,6 +106,8 @@ def fetch_apartment_info(reverse, direct_name, d_name_py):
     # 从数据库取出成交详情
     ret = mysql_fun_bj.select_apartments(reverse, direct_name, d_name_py, 100)
     pedometer = 1
+    if len(ret) == 0:
+        return 0
     for apartment in ret:
         apartment_id = apartment[0]
         apartment_url = apartment[1]
@@ -118,17 +120,18 @@ def fetch_apartment_info(reverse, direct_name, d_name_py):
             mysql_fun_bj.del_apartment_by_id(apartment_id)
         elif ret == -999:
             print('遇到人机认证，程序退出！')
-            sys.exit();
+            return -500
         else:
             print('有异常导致插入出错！出错URL:%s' % apartment_url)
         pedometer += 1
+    return 1
 
 
 def fetch_apartment_info_and_update(switch, url, apartment_id, d_name_py):
-    if switch==0:
+    if switch==1:
         html = requests.get(url, timeout=15).content
         print('***直接连接***')
-    elif switch==1:
+    elif switch==0:
         html = requests.get(url, proxies=proxies1, timeout=15).content
         print('***代理1***')
     else:
@@ -324,10 +327,15 @@ def batch_fetch_and_update_apartment():
     print ('程序开始时间：%s' % time.strftime('%H:%M:%S',time.localtime(start)))
     i = 1
     run_time = 0
-    while run_time < 2:
+    ret = 1
+    while run_time < 2 and ret==1:
         try:
             print('第%d轮执行' % i)
-            fetch_apartment_info(False, '昌平', 'chp')
+            ret = fetch_apartment_info(False, '昌平', 'chp')
+            if ret==-500:
+                print('遇到人机认证，程序结束。')
+            elif ret == 0:
+                print('所有数据更新完毕，程序结束。')
         except IndexError:
             traceback.print_exc()
             break

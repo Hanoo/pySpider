@@ -312,3 +312,105 @@ def etl(d_name_py):
     cursor_local.close()
     conn_local.close()
 
+
+def select_all_apartments(d_name_py):
+    conn = pymysql.connect(host=db_host, port=db_port, user=db_user,
+                           password=db_password, db=db_name, charset=db_charset)
+    cursor = conn.cursor()
+
+    apartment_fetch_sql = 'select id, chengjiaoshijian, chengjiaojiage, pingjunjiage, guapaijiage, chengjiaozhouqi, fangwuhuxing, ' \
+                          'suozailouceng, jianzhumianji, huxingjiegou, taoneimianji, jianzhuleixing, fangwuchaoxiang, jianchengniandai, ' \
+                          'zhuangxiuqingkuang, jianzhujiegou, gongnuanfangshi, tihubili, peibeidianti, lianjiabianhao, jiaoyiquanshu, ' \
+                          'guapaishijian, fangwuyongtu, fangwunianxian, fangquansuoshu, id from apartment_bj_%s' % d_name_py
+    cursor.execute(apartment_fetch_sql)
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return cursor.fetchall()
+
+
+def select_trans_record_bj_by_apartment_id(d_name_py, apartment_id):
+    conn = pymysql.connect(host=db_host, port=db_port, user=db_user,
+                           password=db_password, db=db_name, charset=db_charset)
+
+    cursor = conn.cursor()
+    sql = 'select apartment_id, record_price, price_per_sm, record_time from apartment_trans_record_bj_%s where apartment_id=\'%s\'' % (d_name_py,apartment_id)
+
+    cursor.execute(sql)
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return cursor.fetchall()
+
+
+def select_all_trans_record(d_name_py):
+    conn = pymysql.connect(host=db_host, port=db_port, user=db_user,
+                           password=db_password, db=db_name, charset=db_charset)
+
+    cursor = conn.cursor()
+    sql = 'select apartment_id, record_price, price_per_sm, record_time from apartment_trans_record_bj_%s' % d_name_py
+
+    cursor.execute(sql)
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return cursor.fetchall()
+
+
+def select_partition_name_in_direct(direct_name):
+    conn = pymysql.connect(host=db_host, port=db_port, user=db_user,
+                           password=db_password, db=db_name, charset=db_charset)
+    cursor = conn.cursor()
+
+    sql = 'select partition_name from partitions_bj where direct_name=\'%s\'' % direct_name
+    cursor.execute(sql)
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return cursor.fetchall()
+
+
+def select_apartments_in_partition(d_name_py, partition_name):
+    conn = pymysql.connect(host=db_host, port=db_port, user=db_user,
+                           password=db_password, db=db_name, charset=db_charset)
+    cursor = conn.cursor()
+
+    apartment_fetch_sql = 'select id, detail_url, summary, community_name, chengjiaoshijian, chengjiaojiage, pingjunjiage, guapaijiage, chengjiaozhouqi, fangwuhuxing, ' \
+                          'suozailouceng, jianzhumianji, huxingjiegou, taoneimianji, jianzhuleixing, fangwuchaoxiang, jianchengniandai, ' \
+                          'zhuangxiuqingkuang, jianzhujiegou, gongnuanfangshi, tihubili, peibeidianti, lianjiabianhao, jiaoyiquanshu, ' \
+                          'guapaishijian, fangwuyongtu, fangwunianxian, fangquansuoshu from apartment_bj_%s where partition_name=\'%s\''\
+                          % (d_name_py, partition_name)
+    cursor.execute(apartment_fetch_sql)
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return cursor.fetchall()
+
+
+def restore_records():
+
+    conn = pymysql.connect(host=db_host, port=db_port, user=db_user,
+                           password=db_password, db=db_name, charset=db_charset)
+
+    cursor = conn.cursor()
+    sql = 'select apartment_id, record_price, record_detail, record_time, price_per_sm from apartment_trans_record_bj_chy where apartment_id in (select id from apartment_bj_chp where id not in (select apartment_id from apartment_trans_record_bj_chp))'
+
+    cursor.execute(sql)
+    conn.commit()
+
+    record_list = list(cursor.fetchall())
+    sql_add_trans_record = 'insert into apartment_trans_record_bj_chp (apartment_id, record_price, record_detail,' \
+                           ' record_time, price_per_sm) values (%s, %s, %s, %s, %s)'
+    cursor.executemany(sql_add_trans_record, record_list)
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+
+restore_records()
