@@ -248,12 +248,12 @@ def update_apartment(d_name_py, apartment_info, trans_record_list):
         conn.close()
 
 
-def del_apartment_by_id(apartment_id):
+def del_apartment_by_id(d_name_py, apartment_id):
     conn = pymysql.connect(host=db_host, port=db_port, user=db_user,
                            password=db_password, db=db_name, charset=db_charset)
 
     cursor = conn.cursor()
-    sql = 'delete from apartment_bj where id=%d' % apartment_id
+    sql = 'delete from apartment_bj_%s where id=%d' % (d_name_py,apartment_id)
     cursor.execute(sql)
     conn.commit()
     cursor.close()

@@ -4,7 +4,6 @@ import random
 import time
 import traceback
 import requests
-import sys
 
 from pyquery import PyQuery as pq
 from lianjia import mysql_fun_bj
@@ -113,13 +112,12 @@ def fetch_apartment_info(reverse, direct_name, d_name_py):
         apartment_url = apartment[1]
         ret = fetch_apartment_info_and_update(pedometer%3, apartment_url, apartment_id, d_name_py)
         if ret > 0:
-            time.sleep(1.5)
             print('当前执行记录ID：%d' % apartment_id)
+            time.sleep(1.5)
         elif ret == -1024:
             print('页面内找不到交易历史，删除对应房屋信息：%d' % apartment_id)
-            mysql_fun_bj.del_apartment_by_id(apartment_id)
+            mysql_fun_bj.del_apartment_by_id(d_name_py, apartment_id)
         elif ret == -999:
-            print('遇到人机认证，程序退出！')
             return -500
         else:
             print('有异常导致插入出错！出错URL:%s' % apartment_url)
@@ -276,13 +274,13 @@ def fetch_community_page(partition_id):
             html = requests.get(url).content
 
         pq_doc = pq(html)
-        listContent = pq_doc(".listContent")
-        if listContent:
-            li_items = listContent.items('li')
+        list_content = pq_doc(".listContent")
+        if list_content:
+            li_items = list_content.items('li')
             for li in li_items:
-                communitiy_name = li('img').attr('alt')
-                print(communitiy_name)
-                communities.append((partition_id, communitiy_name))
+                community_name = li('img').attr('alt')
+                print(community_name)
+                communities.append((partition_id, community_name))
                 print('----------------------------------------------------')
             time.sleep(20)
             index += 1
@@ -322,16 +320,16 @@ def update_community():
         mysql_fun_bj.update_community_bj(partition_name_py, direct_name, partition_url, partition_name)
 
 
-def batch_fetch_and_update_apartment():
+def batch_fetch_and_update_apartment(direct_name, d_name_py):
     start = time.time()
     print ('程序开始时间：%s' % time.strftime('%H:%M:%S',time.localtime(start)))
     i = 1
     run_time = 0
     ret = 1
-    while run_time < 2 and ret==1:
+    while run_time < 3 and ret==1:
         try:
             print('第%d轮执行' % i)
-            ret = fetch_apartment_info(False, '昌平', 'chp')
+            ret = fetch_apartment_info(False, direct_name, d_name_py)
             if ret==-500:
                 print('遇到人机认证，程序结束。')
             elif ret == 0:
@@ -345,8 +343,8 @@ def batch_fetch_and_update_apartment():
         except requests.exceptions.ReadTimeout:
             print('网络超时，暂停一分钟')
             time.sleep(60)
-        print('一轮爬取结束，休息8秒。')
-        time.sleep(8)
+        print('一轮爬取结束，休息5秒。')
+        time.sleep(5)
         current = time.time()
         run_time = (current - start) / 3600
         i += 1
@@ -355,5 +353,6 @@ def batch_fetch_and_update_apartment():
     print('程序结束时间：%s' % time.strftime('%H:%M:%S', time.localtime(end)))
     print("程序耗时 : %.03f seconds" % (end - start))
 
-
-batch_fetch_and_update_apartment()
+direct_name1='朝阳'
+d_name_py1 = 'chy' 
+batch_fetch_and_update_apartment(direct_name1, d_name_py1)
