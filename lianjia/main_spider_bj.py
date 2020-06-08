@@ -34,6 +34,7 @@ districts = ['xicheng', 'chaoyang', 'haidian', 'fengtai', 'shijingshan', 'tongzh
 offline = False
 proxies1 = {'http': 'http://118.190.104.85:12306', 'https': 'https://118.190.104.85:12306'}
 proxies2 = {'http': 'http://114.215.43.57:12306', 'https': 'https://114.215.43.57:12306'}
+interval = [2, 8, 3, 7 , 6, 4, 2, 8, 3, 7]
 
 
 # flag作为爬取状态标记，0代表失败，1代表成功，2代表小区没有成交记录，
@@ -99,121 +100,6 @@ def fetch_apartment_detail_url(switch, url, direct_name, partition_name, communi
     inner_span = int(total_fl('span').text())
 
     return url_mapping, inner_span
-
-
-def fetch_apartment_info(reverse, direct_name, d_name_py):
-    # 从数据库取出成交详情
-    ret = mysql_fun_bj.select_apartments(reverse, direct_name, d_name_py, 100)
-    pedometer = 1
-    if len(ret) == 0:
-        return 0
-    for apartment in ret:
-        apartment_id = apartment[0]
-        apartment_url = apartment[1]
-        ret = fetch_apartment_info_and_update(pedometer%3, apartment_url, apartment_id, d_name_py)
-        if ret > 0:
-            print('当前执行记录ID：%d' % apartment_id)
-            time.sleep(1.5)
-        elif ret == -1024:
-            print('页面内找不到交易历史，删除对应房屋信息：%d' % apartment_id)
-            mysql_fun_bj.del_apartment_by_id(d_name_py, apartment_id)
-        elif ret == -999:
-            return -500
-        else:
-            print('有异常导致插入出错！出错URL:%s' % apartment_url)
-        pedometer += 1
-    return 1
-
-
-def fetch_apartment_info_and_update(switch, url, apartment_id, d_name_py):
-    if switch==1:
-        html = requests.get(url, timeout=15).content
-        print('***直接连接***')
-    elif switch==0:
-        html = requests.get(url, proxies=proxies1, timeout=15).content
-        print('***代理1***')
-    else:
-        html = requests.get(url, proxies=proxies2, timeout=15).content
-        print('***代理2***')
-    # html = requests.get(url, timeout=15).content
-    apartment_info_list = []
-    pq_doc = pq(html)
-
-    container = pq_doc('.container').text()
-    if '人机认证' in container:
-        return -999
-
-    # 获取成交时间
-    house_title = pq_doc('.house-title')
-    chengjiaoshijian = house_title('span').text().split(' ')
-    apartment_info_list.append(chengjiaoshijian[0])
-
-    # 获取成交价格和均价
-    div_price = pq_doc('.price')
-    chengjiaojiage = div_price('.dealTotalPrice')('i').html()
-    pingjunjiage = div_price('b').text()
-    apartment_info_list.append(chengjiaojiage)
-    apartment_info_list.append(pingjunjiage)
-
-    # 获取挂牌价格和成交周期
-    div_msg = pq_doc('.msg')
-    spans = div_msg.items('span')
-    msg_list = []
-    for span in spans:
-        msg_list.append(span('label').text())
-    if len(msg_list)<1:
-        detail_header = pq_doc('.sellDetailHeader')
-        title = detail_header('.main')
-        summary = title.text()
-        if summary.find('已下架')>0:
-            return -1024
-        else:
-            return -404
-
-    guapaijiage = msg_list[0]
-    chengjiaozhouqi = msg_list[1]
-    apartment_info_list.append(guapaijiage)
-    apartment_info_list.append(chengjiaozhouqi)
-
-    intro_content = pq_doc('.introContent')
-    base_info_list = intro_content('.base').items('li')
-    for base_info in base_info_list:
-        li_info = base_info.text()[4:]
-        if not li_info:
-            li_info = '暂无数据'
-        apartment_info_list.append(li_info)
-
-    trans_info_list = intro_content('.transaction').items('li')
-    for trans_info in trans_info_list:
-        li_info = trans_info.text()[4:]
-        if not li_info:
-            li_info = '暂无数据'
-        apartment_info_list.append(li_info)
-    apartment_info_list.append(apartment_id)
-
-    # 获取历史成交信息
-    chengjiao_records = pq_doc('.chengjiao_record').items('li')
-    chengjiao_record_count = len(pq_doc('.chengjiao_record').find('li'))
-    if chengjiao_record_count>0:
-        trans_record_list = []
-        for chengjiao_record in chengjiao_records:
-            record_price = chengjiao_record('.record_price').text()
-            record_detail = chengjiao_record('.record_detail').text()
-            details = record_detail.split(',')
-            if len(details) == 2:
-                record_time = details[1].replace('成交', '')
-                price_per_sm = details[0].replace('单价', '').replace('元/平', '')
-                if price_per_sm == '--':
-                    price_per_sm = ''
-            else:
-                record_time = record_detail.replace('成交', '')
-                price_per_sm = ''
-            trans_record_list.append((apartment_id, record_price, record_detail, record_time, price_per_sm))
-
-        return mysql_fun_bj.update_apartment(d_name_py, tuple(apartment_info_list), trans_record_list)
-    else:
-        print('当前房屋没有成交历史，可能是下架的或者没卖掉。%s' % apartment_id)
-        return -404
 
 
 def read_file():
@@ -320,18 +206,148 @@ def update_community():
         mysql_fun_bj.update_community_bj(partition_name_py, direct_name, partition_url, partition_name)
 
 
-def batch_fetch_and_update_apartment(direct_name, d_name_py):
+def fetch_apartment_info_and_update(switch, url, apartment_id, d_name_py):
+    if switch==1:
+        html = requests.get(url, timeout=15).content
+        print('***直接连接***')
+    elif switch==0:
+        html = requests.get(url, proxies=proxies1, timeout=15).content
+        print('***代理1***')
+    else:
+        html = requests.get(url, proxies=proxies2, timeout=15).content
+        print('***代理2***')
+    # html = requests.get(url, timeout=15).content
+    apartment_info_list = []
+    pq_doc = pq(html)
+
+    container = pq_doc('.container').text()
+    if '人机认证' in container:
+        return -999
+
+    # 获取成交时间
+    house_title = pq_doc('.house-title')
+    chengjiaoshijian = house_title('span').text().split(' ')
+    apartment_info_list.append(chengjiaoshijian[0])
+
+    # 获取成交价格和均价
+    div_price = pq_doc('.price')
+    chengjiaojiage = div_price('.dealTotalPrice')('i').html()
+    pingjunjiage = div_price('b').text()
+    apartment_info_list.append(chengjiaojiage)
+    apartment_info_list.append(pingjunjiage)
+
+    # 获取挂牌价格和成交周期
+    div_msg = pq_doc('.msg')
+    spans = div_msg.items('span')
+    msg_list = []
+    for span in spans:
+        msg_list.append(span('label').text())
+    if len(msg_list)<1:
+        detail_header = pq_doc('.sellDetailHeader')
+        title = detail_header('.main')
+        summary = title.text()
+        if summary.find('已下架')>0:
+            return -1024
+        else:
+            return -404
+
+    guapaijiage = msg_list[0]
+    chengjiaozhouqi = msg_list[1]
+    apartment_info_list.append(guapaijiage)
+    apartment_info_list.append(chengjiaozhouqi)
+
+    intro_content = pq_doc('.introContent')
+    base_info_list = intro_content('.base').items('li')
+    for base_info in base_info_list:
+        li_info = base_info.text()[4:]
+        if not li_info:
+            li_info = '暂无数据'
+        apartment_info_list.append(li_info)
+
+    trans_info_list = intro_content('.transaction').items('li')
+    for trans_info in trans_info_list:
+        li_info = trans_info.text()[4:]
+        if not li_info:
+            li_info = '暂无数据'
+        apartment_info_list.append(li_info)
+    apartment_info_list.append(apartment_id)
+
+    # 获取历史成交信息
+    chengjiao_records = pq_doc('.chengjiao_record').items('li')
+    chengjiao_record_count = len(pq_doc('.chengjiao_record').find('li'))
+    if chengjiao_record_count>0:
+        trans_record_list = []
+        for chengjiao_record in chengjiao_records:
+            record_price = chengjiao_record('.record_price').text()
+            record_detail = chengjiao_record('.record_detail').text()
+            details = record_detail.split(',')
+            if len(details) == 2:
+                record_time = details[1].replace('成交', '')
+                price_per_sm = details[0].replace('单价', '').replace('元/平', '')
+                if price_per_sm == '--':
+                    price_per_sm = ''
+            else:
+                record_time = record_detail.replace('成交', '')
+                price_per_sm = ''
+            trans_record_list.append((apartment_id, record_price, record_detail, record_time, price_per_sm))
+
+        return mysql_fun_bj.update_apartment(d_name_py, tuple(apartment_info_list), trans_record_list)
+    else:
+        print('当前房屋没有成交历史，可能是下架的或者没卖掉。%s' % apartment_id)
+        return -404
+
+
+def fetch_apartment_info(reverse, use_proxies, direct_name, d_name_py):
+    # 从数据库取出成交详情
+    ret = mysql_fun_bj.select_apartments(reverse, direct_name, d_name_py, 100)
+    pedometer = 1
+    if len(ret) == 0:
+        return 0
+    for apartment in ret:
+        apartment_id = apartment[0]
+        apartment_url = apartment[1]
+        if use_proxies:
+            ret = fetch_apartment_info_and_update(pedometer%3, apartment_url, apartment_id, d_name_py)
+            if ret > 0:
+                sleep_sec = 1.8
+                print('ID：%d执行成功，休息%d秒' % (apartment_id, sleep_sec))
+                time.sleep(sleep_sec)
+            elif ret == -1024:
+                print('页面内找不到交易历史，删除对应房屋信息：%d' % apartment_id)
+                mysql_fun_bj.del_apartment_by_id(d_name_py, apartment_id)
+            elif ret == -999:
+                return -500
+            else:
+                print('有异常导致插入出错！出错URL:%s' % apartment_url)
+        else:
+            ret = fetch_apartment_info_and_update(1, apartment_url, apartment_id, d_name_py)
+            if ret > 0:
+                sleep_sec = interval[pedometer%10]
+                print('ID：%d执行成功，休息%d秒' % (apartment_id, sleep_sec))
+                time.sleep(sleep_sec)
+            elif ret == -1024:
+                print('页面内找不到交易历史，删除对应房屋信息：%d' % apartment_id)
+                mysql_fun_bj.del_apartment_by_id(d_name_py, apartment_id)
+            elif ret == -999:
+                return -500
+            else:
+                print('有异常导致插入出错！出错URL:%s' % apartment_url)
+        pedometer += 1
+    return 1
+
+
+def batch_fetch_and_update_apartment(runtime, direct_name, d_name_py, reverse_execute, use_proxies):
     start = time.time()
     print ('程序开始时间：%s' % time.strftime('%H:%M:%S',time.localtime(start)))
     i = 1
     run_time = 0
-    ret = 1
-    while run_time < 3 and ret==1:
+    while run_time < runtime:
         try:
             print('第%d轮执行' % i)
-            ret = fetch_apartment_info(False, direct_name, d_name_py)
+            ret = fetch_apartment_info(reverse_execute, use_proxies, direct_name, d_name_py)
             if ret==-500:
-                print('遇到人机认证，程序结束。')
+                print('遇到人机认证，休眠10分钟后继续执行。')
+                time.sleep(600)
             elif ret == 0:
                 print('所有数据更新完毕，程序结束。')
         except IndexError:
@@ -353,6 +369,10 @@ def batch_fetch_and_update_apartment(direct_name, d_name_py):
     print('程序结束时间：%s' % time.strftime('%H:%M:%S', time.localtime(end)))
     print("程序耗时 : %.03f seconds" % (end - start))
 
-direct_name1='朝阳'
-d_name_py1 = 'chy' 
-batch_fetch_and_update_apartment(direct_name1, d_name_py1)
+if __name__ == "__main__":
+    direct_name1='朝阳'
+    d_name_py1 = 'chy'
+    execute_hours = 9
+    reverse_execute1 = False
+    use_proxies1 = False
+    batch_fetch_and_update_apartment(execute_hours, direct_name1, d_name_py1, reverse_execute1, use_proxies1)
