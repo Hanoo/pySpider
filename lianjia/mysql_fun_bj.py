@@ -76,21 +76,11 @@ def insert_partition():
     # 建立数据库连接
     conn = pymysql.connect(host=db_host, port=db_port, user=db_user,
                            password=db_password, db=db_name, charset=db_charset)
-
-    # 获取游标
     cursor = conn.cursor()
-
-    # 执行sql语句
     sql = 'INSERT INTO partitions_bj (partition_name, partition_url) VALUES (%s,%s)'
     rows = cursor.execute(sql, ('4', 'qzcsbj4'))
-
-    # 提交
     conn.commit()
-
-    # 关闭游标
     cursor.close()
-
-    # 关闭连接
     conn.close()
     print (rows)
 
@@ -142,14 +132,15 @@ def select_community_by_condition(condition):
     return cursor.fetchall()
 
 
-def insert_batch_apartment(apartment_list):
+def insert_batch_apartment(apartment_list, table_name_suffix):
     if len(apartment_list)==0:
         return
     else:
         conn = pymysql.connect(host=db_host, port=db_port, user=db_user,
                                 password=db_password, db=db_name, charset=db_charset)
         cursor = conn.cursor()
-        sql = 'INSERT INTO apartment_bj (detail_url, summary, direct_name, partition_name, community_name) VALUES (%s, %s, %s, %s, %s)'
+        sql = 'INSERT INTO apartment_bj_%s' % table_name_suffix
+        sql +=' (detail_url, summary, direct_name, partition_name, community_name) VALUES (%s, %s, %s, %s, %s)'
         rows = cursor.executemany(sql, apartment_list)
 
         # 提交
@@ -313,6 +304,77 @@ def etl(d_name_py):
     conn_local.close()
 
 
+# 一种更加智能的写法
+def new_etl(d_name_py):
+    conn_102 = pymysql.connect(
+        host='10.10.66.102',
+        port=8306,
+        user='crosdev',
+        password='crosdev',
+        db=db_name,
+        charset=db_charset)
+    cursor_102 = conn_102.cursor()
+
+    conn_local = pymysql.connect(host=db_host, port=db_port, user=db_user,
+                           password=db_password, db=db_name, charset=db_charset)
+    cursor_local = conn_local.cursor()
+
+    # 查找本地库中没有成交时间的ID
+    need_update_sql = 'select id from apartment_bj_%s where chengjiaoshijian is null limit 0, 10000' % d_name_py
+    rows = 1
+    while rows > 0:
+        rows = cursor_local.execute(need_update_sql)
+        conn_local.commit()
+        nn_apartment_list = cursor_local.fetchall()
+        if len(nn_apartment_list) > 0:
+            id_list = []
+            for apartment_id in nn_apartment_list:
+                id_list.append(apartment_id[0])
+            # 再查询远程库对应的数据
+            target_sql = 'select chengjiaoshijian, chengjiaojiage, pingjunjiage, guapaijiage, chengjiaozhouqi, ' \
+                         'fangwuhuxing, suozailouceng, jianzhumianji, huxingjiegou, taoneimianji, jianzhuleixing,' \
+                         ' fangwuchaoxiang, jianchengniandai, zhuangxiuqingkuang, jianzhujiegou, gongnuanfangshi,' \
+                         ' tihubili, peibeidianti, lianjiabianhao, jiaoyiquanshu,  guapaishijian, fangwuyongtu,' \
+                         ' fangwunianxian, fangquansuoshu, id from apartment_bj_%s where id in %s' % (d_name_py, tuple(id_list))
+            cursor_102.execute(target_sql)
+            conn_102.commit()
+            apartment_list = list(cursor_102.fetchall())
+            # for apartment in apartment_list:
+            #     print(apartment)
+            # 交易详情写入本地库
+            sql_import = 'update apartment_bj_%s' % d_name_py
+            sql_import += ' set chengjiaoshijian=%s, chengjiaojiage=%s, pingjunjiage=%s, guapaijiage=%s, chengjiaozhouqi=%s, fangwuhuxing=%s, ' \
+                          'suozailouceng=%s, jianzhumianji=%s, huxingjiegou=%s, taoneimianji=%s, jianzhuleixing=%s, fangwuchaoxiang=%s, jianchengniandai=%s, ' \
+                          'zhuangxiuqingkuang=%s, jianzhujiegou=%s, gongnuanfangshi=%s, tihubili=%s, peibeidianti=%s, lianjiabianhao=%s, jiaoyiquanshu=%s, ' \
+                          'guapaishijian=%s, fangwuyongtu=%s, fangwunianxian=%s, fangquansuoshu=%s where id=%s'
+            cursor_local.executemany(sql_import, apartment_list)
+            conn_local.commit()
+
+            # 抽取远程库中的交易记录数据
+            sql_fetch_records = 'select apartment_id, record_price, record_detail, record_time, price_per_sm from ' \
+                                'apartment_trans_record_bj_%s where apartment_id in %s' % (d_name_py, tuple(id_list))
+            cursor_102.execute(sql_fetch_records)
+            trans_records = list(cursor_102.fetchall())
+            # for record in trans_records:
+            #     print(record)
+
+            # 将交易记录写入本地库
+            sql_import_records = 'insert into apartment_trans_record_bj_%s ' % d_name_py
+            sql_import_records += ' (apartment_id, record_price, record_detail, record_time, price_per_sm)' \
+                                  ' values (%s, %s, %s, %s, %s)'
+            cursor_local.executemany(sql_import_records, trans_records)
+            conn_local.commit()
+            print('完成一组数据的处理。')
+        else:
+            print('未获取到任何需要执行的信息。')
+
+    cursor_102.close()
+    conn_102.close()
+    cursor_local.close()
+    conn_local.close()
+
+
+
 def select_all_apartments(d_name_py):
     conn = pymysql.connect(host=db_host, port=db_port, user=db_user,
                            password=db_password, db=db_name, charset=db_charset)
@@ -412,5 +474,21 @@ def restore_records():
     conn.close()
 
 
+# 删除指定小区的所有房屋交易
+def delete_apartment_by_community_name(table_name_suffix, community_name):
+    conn = pymysql.connect(host=db_host, port=db_port, user=db_user,
+                           password=db_password, db=db_name, charset=db_charset)
+    cursor = conn.cursor()
+    sql = 'delete from apartment_bj_%s where community_name=%s' % (table_name_suffix, community_name)
 
-restore_records()
+    rows = cursor.execute(sql)
+    conn.commit()
+
+    cursor.close()
+    conn.close()
+
+    return rows
+
+
+# if __name__ == "__main__":
+#     new_etl('chy')

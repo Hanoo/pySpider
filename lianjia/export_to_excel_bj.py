@@ -1,7 +1,9 @@
+import os
+
 import xlwt
 from lianjia import mysql_fun_bj
 
-def gen_xlwt_in_direct_and_partition(d_name_py, partition_name, apartment_id_records_mapping):
+def gen_xlwt_in_direct_and_partition(d_name_py, partition_name, apartment_id_records_mapping, directory):
     wb = xlwt.Workbook()
     # 添加一个表
     ws = wb.add_sheet('sheet1')
@@ -68,10 +70,14 @@ def gen_xlwt_in_direct_and_partition(d_name_py, partition_name, apartment_id_rec
         print('写入的行数：%d' % row_num)
 
     # 保存excel文件
-    wb.save('C:\\Users\\cyanks\\Desktop\\%s.xls' % partition_name)
+    wb.save('%s\\%s.xls' % (directory, partition_name))
 
-def main_fun():
-    d_name_py = 'chp'
+def main_fun(d_name_py, d_name):
+    base_path = 'C:\\Users\\cyanks\\Desktop\\'
+    path = base_path+d_name
+    is_exists = os.path.exists(path)
+    if not is_exists:
+        os.makedirs(path)
     trans_records = mysql_fun_bj.select_all_trans_record(d_name_py)
     apartment_id_records_mapping = {}
     for trans_record in trans_records:
@@ -85,11 +91,14 @@ def main_fun():
         else:
             apartment_id_records_mapping[apartment_id] = [(record_price, price_per_sm, record_time)]
 
-    partition_name_list = mysql_fun_bj.select_partition_name_in_direct('昌平')
+    partition_name_list = mysql_fun_bj.select_partition_name_in_direct(d_name)
     for ele in partition_name_list:
         partition_name = ele[0]
         print('当前正在处理的片区：%s' % partition_name)
-        gen_xlwt_in_direct_and_partition(d_name_py, partition_name, apartment_id_records_mapping)
+        gen_xlwt_in_direct_and_partition(d_name_py, partition_name, apartment_id_records_mapping, path)
 
 
-main_fun()
+if __name__ == "__main__":
+    direct_name_py = 'chy'
+    direct_name = '朝阳'
+    main_fun(direct_name_py, direct_name)

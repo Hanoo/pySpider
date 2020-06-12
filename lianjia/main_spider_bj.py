@@ -37,48 +37,57 @@ proxies2 = {'http': 'http://114.215.43.57:12306', 'https': 'https://114.215.43.5
 interval = [2, 8, 3, 7 , 6, 4, 2, 8, 3, 7]
 
 
+# 获取小区，爬取交易基本信息和详情页地址。
 # flag作为爬取状态标记，0代表失败，1代表成功，2代表小区没有成交记录，
-def fetch_apartments():
-    community_list = mysql_fun_bj.select_community_by_condition(' where direct_name=\'昌平\' and finished is null')
+def fetch_apartments(direct_name, table_name_suffix):
+    community_list = mysql_fun_bj.select_community_by_condition(' where direct_name=\'%s\' and finished is null' % direct_name)
     for community in community_list:
         flag = 0
         community_id = community[0]
-        direct_name = community[1]
         partition_name = community[3]
         community_name = community[5]
+        print('开始处理小区: %s' % community_name)
         page = 1
-        sleep_sec = random.randint(1, 3)
+        sleep_sec = 1.8
         total_count = 0
-        while page<101:
-            url = base_url + '/chengjiao/pg%drs%s' % (page, community_name)
-            url_mapping, total_count = fetch_apartment_detail_url(page % 3, url, direct_name, partition_name, community_name)
-            if len(url_mapping) > 0:
-                print ('当前处理页面的url：%s' % url)
-                ret = mysql_fun_bj.insert_batch_apartment(url_mapping)
-                if ret<1:
-                    print ('写入程序出错！正在写入的小区id：%s' % community_id)
-                    flag = 0
+        try:
+            while page<101:
+                url = base_url + '/chengjiao/pg%drs%s' % (page, community_name)
+                url_mapping, total_count = fetch_apartment_detail_url(page % 3, url, direct_name, partition_name, community_name)
+                if len(url_mapping) > 0:
+                    print ('当前处理页面的url：%s' % url)
+                    ret = mysql_fun_bj.insert_batch_apartment(url_mapping, table_name_suffix)
+                    if ret<1:
+                        print ('写入程序出错！正在写入的小区id：%s' % community_id)
+                        flag = 0
+                    else:
+                        flag = 1
+                    page += 1
+                    time.sleep(sleep_sec)
                 else:
-                    flag = 1
-                page += 1
-                time.sleep(sleep_sec)
-            else:
-                if page==1:
-                    print('%s一套交易都没有' % community_name)
-                    flag = 2
-                time.sleep(sleep_sec)
-                break
-        mysql_fun_bj.update_community_bj_for_finish(community_id, flag, total_count)
-        print('本小区处理完成。休息5秒')
-        time.sleep(5)
+                    if page==1:
+                        print('%s一套交易都没有' % community_name)
+                        flag = 2
+                    break
+            mysql_fun_bj.update_community_bj_for_finish(community_id, flag, total_count)
+            print('%s处理完成。' % community_name)
+            time.sleep(3)
+        except TimeoutError:
+            print('请求超时。')
+            if page<100:
+                print('抽取中途出错，只能把已经写入的内容都删除了。')
+                ret = mysql_fun_bj.delete_apartment_by_community_name(table_name_suffix, community_name)
+                print('删除纪录：%d' % ret)
+                time.sleep(60) # 休息一下等网络恢复
+
 
 
 # 根据url获取当前页面的房屋详情页url
 def fetch_apartment_detail_url(switch, url, direct_name, partition_name, community_name):
-    if switch==0:
+    if switch==1:
         print('直接访问。')
         html = requests.get(url, headers=headers).content
-    elif switch==1:
+    elif switch==2:
         print('使用代理1进行访问。')
         html = requests.get(url, headers=headers, proxies=proxies1).content
     else:
@@ -370,9 +379,10 @@ def batch_fetch_and_update_apartment(runtime, direct_name, d_name_py, reverse_ex
     print("程序耗时 : %.03f seconds" % (end - start))
 
 if __name__ == "__main__":
-    direct_name1='朝阳'
-    d_name_py1 = 'chy'
+    direct_name1='丰台'
+    suffix = 'ft'
     execute_hours = 9
     reverse_execute1 = False
     use_proxies1 = False
-    batch_fetch_and_update_apartment(execute_hours, direct_name1, d_name_py1, reverse_execute1, use_proxies1)
+    fetch_apartments(direct_name1, suffix)
+    # batch_fetch_and_update_apartment(execute_hours, direct_name1, suffix, reverse_execute1, use_proxies1)
