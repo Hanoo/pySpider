@@ -8,7 +8,10 @@ import requests
 from pyquery import PyQuery as pq
 from lianjia import mysql_fun_bj
 
-separator = "\\"
+import sys
+import codecs
+sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
+
 user_agent = random.choice([
         "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; AcooBrowser; .NET CLR 1.1.4322; .NET CLR 2.0.50727)",
         "Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.0; Acoo Browser; SLCC1; .NET CLR 2.0.50727; Media Center PC 5.0; .NET CLR 3.0.04506)",
@@ -34,7 +37,7 @@ districts = ['xicheng', 'chaoyang', 'haidian', 'fengtai', 'shijingshan', 'tongzh
 offline = False
 proxies1 = {'http': 'http://118.190.104.85:12306', 'https': 'https://118.190.104.85:12306'}
 proxies2 = {'http': 'http://114.215.43.57:12306', 'https': 'https://114.215.43.57:12306'}
-interval = [2, 8, 3, 7 , 6, 4, 2, 8, 3, 7]
+interval = [2.5, 6.5, 3, 6, 5, 4, 2, 6.5, 3, 5.5]
 
 
 # 获取小区，爬取交易基本信息和详情页地址。
@@ -55,10 +58,10 @@ def fetch_apartments(direct_name, table_name_suffix):
                 url = base_url + '/chengjiao/pg%drs%s' % (page, community_name)
                 url_mapping, total_count = fetch_apartment_detail_url(page % 3, url, direct_name, partition_name, community_name)
                 if len(url_mapping) > 0:
-                    print ('当前处理页面的url：%s' % url)
+                    print('当前处理页面的url：%s' % url)
                     ret = mysql_fun_bj.insert_batch_apartment(url_mapping, table_name_suffix)
                     if ret<1:
-                        print ('写入程序出错！正在写入的小区id：%s' % community_id)
+                        print('写入程序出错！正在写入的小区id：%s' % community_id)
                         flag = 0
                     else:
                         flag = 1
@@ -78,8 +81,7 @@ def fetch_apartments(direct_name, table_name_suffix):
                 print('抽取中途出错，只能把已经写入的内容都删除了。')
                 ret = mysql_fun_bj.delete_apartment_by_community_name(table_name_suffix, community_name)
                 print('删除纪录：%d' % ret)
-                time.sleep(60) # 休息一下等网络恢复
-
+                time.sleep(60)  # 休息一下等网络恢复
 
 
 # 根据url获取当前页面的房屋详情页url
@@ -319,7 +321,7 @@ def fetch_apartment_info(reverse, use_proxies, direct_name, d_name_py):
             ret = fetch_apartment_info_and_update(pedometer%3, apartment_url, apartment_id, d_name_py)
             if ret > 0:
                 sleep_sec = 1.8
-                print('ID：%d执行成功，休息%d秒' % (apartment_id, sleep_sec))
+                print('ID：%d执行成功，休息%0.2f秒' % (apartment_id, sleep_sec))
                 time.sleep(sleep_sec)
             elif ret == -1024:
                 print('页面内找不到交易历史，删除对应房屋信息：%d' % apartment_id)
@@ -332,7 +334,7 @@ def fetch_apartment_info(reverse, use_proxies, direct_name, d_name_py):
             ret = fetch_apartment_info_and_update(1, apartment_url, apartment_id, d_name_py)
             if ret > 0:
                 sleep_sec = interval[pedometer%10]
-                print('ID：%d执行成功，休息%d秒' % (apartment_id, sleep_sec))
+                print('ID：%d执行成功，休息%0.2f秒' % (apartment_id, sleep_sec))
                 time.sleep(sleep_sec)
             elif ret == -1024:
                 print('页面内找不到交易历史，删除对应房屋信息：%d' % apartment_id)
@@ -378,8 +380,9 @@ def batch_fetch_and_update_apartment(runtime, direct_name, d_name_py, reverse_ex
     print('程序结束时间：%s' % time.strftime('%H:%M:%S', time.localtime(end)))
     print("程序耗时 : %.03f seconds" % (end - start))
 
+
 if __name__ == "__main__":
-    direct_name1='丰台'
+    direct_name1 = '丰台'
     suffix = 'ft'
     execute_hours = 9
     reverse_execute1 = False
