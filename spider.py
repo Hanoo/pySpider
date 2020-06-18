@@ -1,4 +1,5 @@
 #!/usr/bin/python
+# encoding=utf-8
 
 import argparse
 import os
@@ -6,6 +7,7 @@ import sys
 import site177
 import time
 import requests
+from common import socks_proxy
 
 parser = argparse.ArgumentParser(description='manual to this script')
 parser.add_argument('--bu', type=str, default=None)
@@ -16,8 +18,8 @@ args = parser.parse_args()
 
 proxies = {'http': 'socks5://localhost:58080', 'https': 'socks5://localhost:58080'}
 
-base_url = 'http://www.177pic.info/html/2019/10/3182183.html'
-base_folder = "/home/cyanks/spider/"
+base_url = 'http://www.177pic.info/html/2016/12/1287498.html'
+base_folder = 'D:\\Download\\'
 finished_number = 0
 
 if args.bu:
@@ -53,36 +55,34 @@ def mkdir(path):
 def download_pic(pic_urls, saved_folder):
     d_folder = base_folder + saved_folder
     mkdir(d_folder)
-    global finished_number
+
     for pic in pic_urls:
         cache_array = pic.split('/')
         pic_name = cache_array[len(cache_array) - 1]
-
         save_path = d_folder + separator + pic_name
         if os.path.exists(save_path):
             print("File: " + save_path + " exists.")
-            finished_number += 1
         else:
             if args.proxy:
-                r = requests.get(pic, proxies=proxies)
+                r = socks_proxy.get_res_in_socks(pic)
             else:
                 r = requests.get(pic)
-            finished_number += 1
+
             with open(save_path, "wb") as code:
                 code.write(r.content)
-
             print("Saving image " + pic_name + " success")
-            time.sleep(1)
+            # time.sleep(1)
+        pic_urls.remove(pic)
 
 
-tittle, picUrlList = site177.getPicUrlList(base_url, proxies)
-pic_number = len(picUrlList)
-print(str(pic_number)+" pictures will be download.")
+tittle, pic_url_list = site177.get_pic_url_list(base_url)
 
-while finished_number < pic_number:
+while pic_url_list:
+    print('%d pictures will be downloaded.' % len(pic_url_list))
     try:
-        download_pic(picUrlList, tittle)
+        download_pic(pic_url_list, tittle)
     except requests.ConnectionError:
+        print('meet network issue.')
         time.sleep(10)
 
 print("Jobs done!")

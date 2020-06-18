@@ -1,10 +1,9 @@
-import requests
 from pyquery import PyQuery as pq
+from common import socks_proxy
 
 
-def get_sub_url(base_url, proxies):
-    response = requests.get(base_url, proxies=proxies)
-    html = response.content
+def get_sub_url(base_url):
+    html = socks_proxy.get_html_in_socks(base_url)
     pq_doc = pq(html)
     folder_name = pq_doc('title').html()
     page_links = pq_doc(".page-links").find('a').items()
@@ -18,14 +17,13 @@ def get_sub_url(base_url, proxies):
     return url_list, folder_name
 
 
-def getPicUrl(page_url, proxies):
-    response = requests.get(page_url, proxies=proxies)
+def get_pic_url(page_url):
 
-    html = response.content
+    html = socks_proxy.get_html_in_socks(page_url)
 
     pq_doc = pq(html)
 
-    items = pq_doc("img").items()
+    items = pq_doc('img').items()
 
     pic_list = []
     for it in items:
@@ -36,8 +34,8 @@ def getPicUrl(page_url, proxies):
     return pic_list
 
 
-def getPicUrlList(base_url, proxies):
-    page_list, folder_name = get_sub_url(base_url, proxies)
+def get_pic_url_list(base_url):
+    page_list, folder_name = get_sub_url(base_url)
     page_list.insert(0, base_url)
 
     pic_url_list = []
@@ -45,7 +43,7 @@ def getPicUrlList(base_url, proxies):
     title = title_array[0].strip()
 
     for url in page_list:
-        pc_list = getPicUrl(url, proxies)
+        pc_list = get_pic_url(url)
         pic_url_list.extend(pc_list)
 
     return title, pic_url_list
