@@ -339,6 +339,9 @@ def new_etl(d_name_py):
             cursor_102.execute(target_sql)
             conn_102.commit()
             apartment_list = list(cursor_102.fetchall())
+            if len(apartment_list) == 0:
+                print('未能在远程库查询到对应的记录，程序退出。')
+                break
             # for apartment in apartment_list:
             #     print(apartment)
             # 交易详情写入本地库

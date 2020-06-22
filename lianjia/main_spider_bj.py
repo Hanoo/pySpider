@@ -4,12 +4,14 @@ import random
 import time
 import traceback
 import requests
-
-from pyquery import PyQuery as pq
-from lianjia import mysql_fun_bj
-
+import db_func_bj
+import argparse
 import sys
 import codecs
+
+from pyquery import PyQuery as pq
+from db_func_bj import DBOperateSet
+
 sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
 
 user_agent = random.choice([
@@ -35,15 +37,16 @@ headers = {'User-Agent': user_agent}
 base_url = 'https://bj.lianjia.com'
 districts = ['xicheng', 'chaoyang', 'haidian', 'fengtai', 'shijingshan', 'tongzhou', 'changping', 'daxing', 'yizhuangkaifaqu', 'shunyi', 'fangshan']
 offline = False
-proxies1 = {'http': 'http://118.190.104.85:12306', 'https': 'https://118.190.104.85:12306'}
-proxies2 = {'http': 'http://114.215.43.57:12306', 'https': 'https://114.215.43.57:12306'}
-interval = [2.5, 6.5, 3, 6, 5, 4, 2, 6.5, 3, 5.5]
+http_proxy_1 = {'http': 'http://118.190.104.85:12306', 'https': 'https://118.190.104.85:12306'}
+http_proxy_2 = {'http': 'http://114.215.43.57:12306', 'https': 'https://114.215.43.57:12306'}
+interval = [2.5, 6, 3, 6, 5, 4, 2, 6, 3, 5.5]
 
 
 # 获取小区，爬取交易基本信息和详情页地址。
 # flag作为爬取状态标记，0代表失败，1代表成功，2代表小区没有成交记录，
-def fetch_apartments(direct_name, table_name_suffix):
-    community_list = mysql_fun_bj.select_community_by_condition(' where direct_name=\'%s\' and finished is null' % direct_name)
+def fetch_apartments(env, direct_name, table_name_suffix):
+    db_oper = DBOperateSet(env)
+    community_list = db_oper.select_community_by_condition(' where direct_name=\'%s\' and finished is null' % direct_name)
     for community in community_list:
         flag = 0
         community_id = community[0]
@@ -59,7 +62,7 @@ def fetch_apartments(direct_name, table_name_suffix):
                 url_mapping, total_count = fetch_apartment_detail_url(page % 3, url, direct_name, partition_name, community_name)
                 if len(url_mapping) > 0:
                     print('当前处理页面的url：%s' % url)
-                    ret = mysql_fun_bj.insert_batch_apartment(url_mapping, table_name_suffix)
+                    ret = db_oper.insert_batch_apartment(url_mapping, table_name_suffix)
                     if ret<1:
                         print('写入程序出错！正在写入的小区id：%s' % community_id)
                         flag = 0
@@ -72,16 +75,17 @@ def fetch_apartments(direct_name, table_name_suffix):
                         print('%s一套交易都没有' % community_name)
                         flag = 2
                     break
-            mysql_fun_bj.update_community_bj_for_finish(community_id, flag, total_count)
+            db_oper.update_community_bj_for_finish(community_id, flag, total_count)
             print('%s处理完成。' % community_name)
             time.sleep(3)
         except TimeoutError:
             print('请求超时。')
             if page<100:
                 print('抽取中途出错，只能把已经写入的内容都删除了。')
-                ret = mysql_fun_bj.delete_apartment_by_community_name(table_name_suffix, community_name)
+                ret = db_oper.delete_apartment_by_community_name(table_name_suffix, community_name)
                 print('删除纪录：%d' % ret)
                 time.sleep(60)  # 休息一下等网络恢复
+    db_oper.before_quit()
 
 
 # 根据url获取当前页面的房屋详情页url
@@ -91,10 +95,10 @@ def fetch_apartment_detail_url(switch, url, direct_name, partition_name, communi
         html = requests.get(url, headers=headers).content
     elif switch==2:
         print('使用代理1进行访问。')
-        html = requests.get(url, headers=headers, proxies=proxies1).content
+        html = requests.get(url, headers=headers, proxies=http_proxy_1).content
     else:
         print('使用代理2进行访问。')
-        html = requests.get(url, headers=headers, proxies=proxies2).content
+        html = requests.get(url, headers=headers, proxies=http_proxy_2).content
 
     pq_doc = pq(html)
     url_mapping = []
@@ -126,7 +130,8 @@ def read_file():
 
 
 # 爬取分片
-def fetch_partition():
+def fetch_partition(env):
+    db_oper = DBOperateSet(env)
     for district in districts:
         list1 = []
         url = base_url + '/chengjiao/' + district
@@ -142,24 +147,28 @@ def fetch_partition():
                 ele = (partition.html(), partition.attr('href'))
                 list1.append(ele)
         print ('搞定%s区的片区了，有：%d条记录' % (district, len(list1)))
-        ret = mysql_fun_bj.filter_dup_partition_by_url(list1)
+        ret = db_oper.filter_dup_partition_by_url(list1)
 
         if len(ret)>0:
-            mysql_fun_bj.insert_batch_partition(ret)
+            db_oper.insert_batch_partition(ret)
         time.sleep(20)
+    db_oper.before_quit()
 
 
 # 从数据库读取所有分片，循环获取小区名称
-def fetch_community():
-    partition_list = mysql_fun_bj.select_partition()
+def fetch_community(env):
+    db_oper = DBOperateSet(env)
+    partition_list = db_oper.select_partition()
     for partition in partition_list :
         partition_url = partition[2]
         partition_id = partition_url.split('/')[2]
         fetch_community_page(partition_id)
+    db_oper.before_quit()
 
 
 # 根据分片的url获取小区名称
-def fetch_community_page(partition_id):
+def fetch_community_page(env, partition_id):
+    db_oper = DBOperateSet(env)
     communities = []
     index = 1
     while True:
@@ -184,11 +193,13 @@ def fetch_community_page(partition_id):
         else: # 页面没有内容
             print ('已经到了最后一页了')
             break
-    mysql_fun_bj.insert_community(communities)
+    db_oper.insert_community(communities)
+    db_oper.before_quit()
 
 
-def get_exactly_direct_name():
-    partition_list = mysql_fun_bj.select_partition(' where direct_name is null')
+def get_exactly_direct_name(env):
+    db_oper = DBOperateSet(env)
+    partition_list = db_oper.select_partition(' where direct_name is null')
     for partition in partition_list:
         partition_id = partition[0]
         partition_name = partition[1]
@@ -200,32 +211,38 @@ def get_exactly_direct_name():
         direct_url = str(selected.attr('href'))
         direct_name = direct_url.replace('/', '').replace('chengjiao','')
         print('%s片区的真实区县：%s' % (partition_name, direct_name))
-        ret = mysql_fun_bj.update_partition_bj(partition_id, direct_name)
+        ret = db_oper.update_partition_bj(partition_id, direct_name)
         if ret > 0:
             print('%s片区的正确市区更新成功' % partition_name)
         time.sleep(4)
+    db_oper.before_quit()
 
 
-def update_community():
-    partition_list = mysql_fun_bj.select_partition('')
+def update_community(env):
+    db_oper = DBOperateSet(env)
+    partition_list = db_oper.select_partition('')
     for partition in partition_list:
         partition_name = partition[1]
         partition_url = partition[2]
         print(partition_url)
         direct_name = partition[3]
         partition_name_py = partition_url.replace('/', '').replace('chengjiao', '')
-        mysql_fun_bj.update_community_bj(partition_name_py, direct_name, partition_url, partition_name)
+        db_oper.update_community_bj(partition_name_py, direct_name, partition_url, partition_name)
+    db_oper.before_quit()
 
 
-def fetch_apartment_info_and_update(switch, url, apartment_id, d_name_py):
+def fetch_apartment_info_and_update(db_oper, switch, url, apartment_id, d_name_py):
+    if not isinstance(db_oper, DBOperateSet):
+        return -1
+
     if switch==1:
         html = requests.get(url, timeout=15).content
         print('***直接连接***')
     elif switch==0:
-        html = requests.get(url, proxies=proxies1, timeout=15).content
+        html = requests.get(url, proxies=http_proxy_1, timeout=15).content
         print('***代理1***')
     else:
-        html = requests.get(url, proxies=proxies2, timeout=15).content
+        html = requests.get(url, proxies=http_proxy_2, timeout=15).content
         print('***代理2***')
     # html = requests.get(url, timeout=15).content
     apartment_info_list = []
@@ -302,15 +319,16 @@ def fetch_apartment_info_and_update(switch, url, apartment_id, d_name_py):
                 price_per_sm = ''
             trans_record_list.append((apartment_id, record_price, record_detail, record_time, price_per_sm))
 
-        return mysql_fun_bj.update_apartment(d_name_py, tuple(apartment_info_list), trans_record_list)
+        return db_oper.update_apartment(d_name_py, tuple(apartment_info_list), trans_record_list)
     else:
         print('当前房屋没有成交历史，可能是下架的或者没卖掉。%s' % apartment_id)
         return -404
 
 
-def fetch_apartment_info(reverse, use_proxies, direct_name, d_name_py):
+def fetch_apartment_info(reverse, use_proxies, direct_name, d_name_py, env):
+    db_oper = DBOperateSet(env)
     # 从数据库取出成交详情
-    ret = mysql_fun_bj.select_apartments(reverse, direct_name, d_name_py, 100)
+    ret = db_oper.select_apartments(reverse, direct_name, d_name_py, 100)
     pedometer = 1
     if len(ret) == 0:
         return 0
@@ -318,36 +336,37 @@ def fetch_apartment_info(reverse, use_proxies, direct_name, d_name_py):
         apartment_id = apartment[0]
         apartment_url = apartment[1]
         if use_proxies:
-            ret = fetch_apartment_info_and_update(pedometer%3, apartment_url, apartment_id, d_name_py)
+            ret = fetch_apartment_info_and_update(db_oper, pedometer%3, apartment_url, apartment_id, d_name_py)
             if ret > 0:
                 sleep_sec = 1.8
                 print('ID：%d执行成功，休息%0.2f秒' % (apartment_id, sleep_sec))
                 time.sleep(sleep_sec)
             elif ret == -1024:
                 print('页面内找不到交易历史，删除对应房屋信息：%d' % apartment_id)
-                mysql_fun_bj.del_apartment_by_id(d_name_py, apartment_id)
+                db_oper.del_apartment_by_id(d_name_py, apartment_id)
             elif ret == -999:
                 return -500
             else:
                 print('有异常导致插入出错！出错URL:%s' % apartment_url)
         else:
-            ret = fetch_apartment_info_and_update(1, apartment_url, apartment_id, d_name_py)
+            ret = fetch_apartment_info_and_update(db_oper, 1, apartment_url, apartment_id, d_name_py)
             if ret > 0:
                 sleep_sec = interval[pedometer%10]
                 print('ID：%d执行成功，休息%0.2f秒' % (apartment_id, sleep_sec))
                 time.sleep(sleep_sec)
             elif ret == -1024:
                 print('页面内找不到交易历史，删除对应房屋信息：%d' % apartment_id)
-                mysql_fun_bj.del_apartment_by_id(d_name_py, apartment_id)
+                db_oper.del_apartment_by_id(d_name_py, apartment_id)
             elif ret == -999:
                 return -500
             else:
                 print('有异常导致插入出错！出错URL:%s' % apartment_url)
         pedometer += 1
+    db_oper.before_quit()
     return 1
 
 
-def batch_fetch_and_update_apartment(runtime, direct_name, d_name_py, reverse_execute, use_proxies):
+def batch_fetch_and_update_apartment(runtime, direct_name, d_name_py, reverse_execute, use_proxies, env):
     start = time.time()
     print ('程序开始时间：%s' % time.strftime('%H:%M:%S',time.localtime(start)))
     i = 1
@@ -355,7 +374,7 @@ def batch_fetch_and_update_apartment(runtime, direct_name, d_name_py, reverse_ex
     while run_time < runtime:
         try:
             print('第%d轮执行' % i)
-            ret = fetch_apartment_info(reverse_execute, use_proxies, direct_name, d_name_py)
+            ret = fetch_apartment_info(reverse_execute, use_proxies, direct_name, d_name_py, env)
             if ret==-500:
                 print('遇到人机认证，休眠10分钟后继续执行。')
                 time.sleep(600)
@@ -382,10 +401,57 @@ def batch_fetch_and_update_apartment(runtime, direct_name, d_name_py, reverse_ex
 
 
 if __name__ == "__main__":
-    direct_name1 = '丰台'
-    suffix = 'ft'
-    execute_hours = 9
-    reverse_execute1 = False
-    use_proxies1 = False
-    fetch_apartments(direct_name1, suffix)
-    # batch_fetch_and_update_apartment(execute_hours, direct_name1, suffix, reverse_execute1, use_proxies1)
+    parser = argparse.ArgumentParser(description='manual to this script')
+    parser.add_argument('--dn',  type=str, default='大兴')
+    parser.add_argument('--sfx', type=str, default='dx')
+    parser.add_argument('--eh',  type=int, default=1)
+    parser.add_argument('--rve', type=bool, default=False)
+    parser.add_argument('--upx', type=bool, default=False)
+    parser.add_argument('--env', type=int, default=1)
+    args = parser.parse_args()
+
+    if args.dn:
+        direct_name1 = args.dn
+        print("--- Use argument input as direct name. ---")
+    else:
+        direct_name1 = '大兴'
+        print("--- Use default direct name. ---")
+
+    if args.sfx:
+        suffix = args.sfx
+        print("--- Use argument input as table suffix. ---")
+    else:
+        suffix = 'dx'
+        print("--- Use default table suffix. ---")
+
+    if args.eh:
+        execute_hours = args.eh
+        print("--- Use argument input execute hour. ---")
+    else:
+        execute_hours = 1
+        print("--- Use default execute hour. ---")
+
+    if args.rve:
+        reverse_execute1 = args.rve
+        print("--- Use argument as select data in reverse order. ---")
+    else:
+        reverse_execute1 = False
+        print("--- Select data in order. ---")
+
+    if args.upx:
+        use_proxies1 = args.upx
+        print("--- Use http proxy model. ---")
+    else:
+        use_proxies1 = False
+        print("--- Use direct connection. ---")
+
+    if args.env:
+        environment = args.env
+        print('--- Use argument as environment selection. ---')
+    else:
+        environment = 1
+        print('--- Local database in use. ---')
+
+    fetch_apartments(environment, direct_name1, suffix)
+    # batch_fetch_and_update_apartment(execute_hours, direct_name1, suffix, reverse_execute1, use_proxies1, environment)
+
