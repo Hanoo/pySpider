@@ -410,48 +410,30 @@ if __name__ == "__main__":
     parser.add_argument('--env', type=int, default=1)
     args = parser.parse_args()
 
-    if args.dn:
-        direct_name1 = args.dn
-        print("--- Use argument input as direct name. ---")
-    else:
-        direct_name1 = '大兴'
-        print("--- Use default direct name. ---")
+    direct_name1 = args.dn
+    print("--- Direct name choiced: %s ---" % direct_name1)
 
-    if args.sfx:
-        suffix = args.sfx
-        print("--- Use argument input as table suffix. ---")
-    else:
-        suffix = 'dx'
-        print("--- Use default table suffix. ---")
+    suffix = args.sfx
+    print("--- Table suffix: %s ---" % suffix)
 
-    if args.eh:
-        execute_hours = args.eh
-        print("--- Use argument input execute hour. ---")
-    else:
-        execute_hours = 1
-        print("--- Use default execute hour. ---")
+    execute_hours = args.eh
+    print("--- Script execution hours： %d ---" % execute_hours)
 
-    if args.rve:
-        reverse_execute1 = args.rve
-        print("--- Use argument as select data in reverse order. ---")
-    else:
-        reverse_execute1 = False
-        print("--- Select data in order. ---")
+    reverse_order = args.rve
+    print("---Select data in reverse order? %s ---" % reverse_order)
 
-    if args.upx:
-        use_proxies1 = args.upx
+    use_proxies1 = args.upx
+    if use_proxies1:
         print("--- Use http proxy model. ---")
     else:
-        use_proxies1 = False
-        print("--- Use direct connection. ---")
+        print("--- Connect directly. ---")
 
-    if args.env:
-        environment = args.env
-        print('--- Use argument as environment selection. ---')
+    environment = args.env
+    if environment==1:
+        print('--- Local database. ---')
     else:
-        environment = 1
-        print('--- Local database in use. ---')
+        print('--- Remote database ---')
 
     fetch_apartments(environment, direct_name1, suffix)
-    # batch_fetch_and_update_apartment(execute_hours, direct_name1, suffix, reverse_execute1, use_proxies1, environment)
+    batch_fetch_and_update_apartment(execute_hours, direct_name1, suffix, reverse_order, use_proxies1, environment)
 
