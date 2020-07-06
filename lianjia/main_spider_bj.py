@@ -44,9 +44,40 @@ interval = [2.5, 6, 3, 6, 5, 4, 2, 6, 3, 5.5]
 
 # 获取小区，爬取交易基本信息和详情页地址。
 # flag作为爬取状态标记，0代表失败，1代表成功，2代表小区没有成交记录，
-def fetch_apartments(env, direct_name, table_name_suffix):
+def wrap_fetch_apartments_base_info(env, run_hour, direct_name, table_name_suffix, use_proxy):
+    start = time.time()
+    print('程序开始时间：%s' % time.strftime('%H:%M:%S', time.localtime(start)))
+    i = 1
+    run_time = 0
+    while run_time < run_hour:
+        try:
+            print('第%d轮执行' % i)
+            ret = fetch_apartments(env, direct_name, table_name_suffix, use_proxy)
+            if ret==0:
+                print('所有数据抽取完毕。')
+                break
+        except IndexError:
+            traceback.print_exc()
+            break
+        except requests.exceptions.ConnectionError:
+            print('遇到网络错误，再试一次。')
+            continue
+        except requests.exceptions.ReadTimeout:
+            print('网络超时，暂停一分钟')
+            time.sleep(60)
+        print('一轮爬取结束，休息5秒。')
+        time.sleep(5)
+        current = time.time()
+        run_time = (current - start) / 3600
+        i += 1
+    end = time.time()
+    print('共爬取的轮数:%d' % i)
+    print('程序结束时间：%s' % time.strftime('%H:%M:%S', time.localtime(end)))
+    print("程序耗时 : %.03f seconds" % (end - start))
+
+def fetch_apartments(env, direct_name, table_name_suffix, use_proxy):
     db_oper = DBOperateSet(env)
-    community_list = db_oper.select_community_by_condition(' where direct_name=\'%s\' and finished is null' % direct_name)
+    community_list = db_oper.select_community_by_condition(' where direct_name=\'%s\' and finished is null limit 0,100' % direct_name)
     for community in community_list:
         flag = 0
         community_id = community[0]
@@ -59,7 +90,7 @@ def fetch_apartments(env, direct_name, table_name_suffix):
         try:
             while page<101:
                 url = base_url + '/chengjiao/pg%drs%s' % (page, community_name)
-                url_mapping, total_count = fetch_apartment_detail_url(page % 3, url, direct_name, partition_name, community_name)
+                url_mapping, total_count = fetch_apartment_detail_url(page % 3, url, direct_name, partition_name, community_name, use_proxy)
                 if len(url_mapping) > 0:
                     print('当前处理页面的url：%s' % url)
                     ret = db_oper.insert_batch_apartment(url_mapping, table_name_suffix)
@@ -87,18 +118,24 @@ def fetch_apartments(env, direct_name, table_name_suffix):
                 time.sleep(60)  # 休息一下等网络恢复
     db_oper.before_quit()
 
+    return len(community_list)
+
 
 # 根据url获取当前页面的房屋详情页url
-def fetch_apartment_detail_url(switch, url, direct_name, partition_name, community_name):
-    if switch==1:
+def fetch_apartment_detail_url(switch, url, direct_name, partition_name, community_name, use_proxy):
+    if use_proxy:
+        if switch==1:
+            print('直接访问。')
+            html = requests.get(url, headers=headers).content
+        elif switch==2:
+            print('使用代理1进行访问。')
+            html = requests.get(url, headers=headers, proxies=http_proxy_1).content
+        else:
+            print('使用代理2进行访问。')
+            html = requests.get(url, headers=headers, proxies=http_proxy_2).content
+    else:
         print('直接访问。')
         html = requests.get(url, headers=headers).content
-    elif switch==2:
-        print('使用代理1进行访问。')
-        html = requests.get(url, headers=headers, proxies=http_proxy_1).content
-    else:
-        print('使用代理2进行访问。')
-        html = requests.get(url, headers=headers, proxies=http_proxy_2).content
 
     pq_doc = pq(html)
     url_mapping = []
@@ -380,6 +417,7 @@ def batch_fetch_and_update_apartment(runtime, direct_name, d_name_py, reverse_ex
                 time.sleep(600)
             elif ret == 0:
                 print('所有数据更新完毕，程序结束。')
+                break
         except IndexError:
             traceback.print_exc()
             break
@@ -402,8 +440,8 @@ def batch_fetch_and_update_apartment(runtime, direct_name, d_name_py, reverse_ex
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='manual to this script')
-    parser.add_argument('--dn',  type=str, default='大兴')
-    parser.add_argument('--sfx', type=str, default='dx')
+    parser.add_argument('--dn',  type=str, default='海淀')
+    parser.add_argument('--sfx', type=str, default='hd')
     parser.add_argument('--eh',  type=int, default=1)
     parser.add_argument('--rve', type=bool, default=False)
     parser.add_argument('--upx', type=bool, default=False)
@@ -420,7 +458,7 @@ if __name__ == "__main__":
     print("--- Script execution hours： %d ---" % execute_hours)
 
     reverse_order = args.rve
-    print("---Select data in reverse order? %s ---" % reverse_order)
+    print("--- Select data in reverse order? %s ---" % reverse_order)
 
     use_proxies1 = args.upx
     if use_proxies1:
@@ -434,6 +472,7 @@ if __name__ == "__main__":
     else:
         print('--- Remote database ---')
 
-    fetch_apartments(environment, direct_name1, suffix)
-    batch_fetch_and_update_apartment(execute_hours, direct_name1, suffix, reverse_order, use_proxies1, environment)
+    wrap_fetch_apartments_base_info(environment, execute_hours, direct_name1, suffix, use_proxies1)
+    # batch_fetch_and_update_apartment(execute_hours, direct_name1, suffix, reverse_order, use_proxies1, environment)
+    # db_func_bj.new_etl('dch')
 
