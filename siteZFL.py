@@ -8,7 +8,7 @@ article_title = ''
 label = ''
 
 
-def getPicUrl(url):
+def get_pic_url_list(url):
     response = requests.get(url)
 
     html = response.content
@@ -21,8 +21,8 @@ def getPicUrl(url):
     items = pq_doc("img").items()
     global label
     if not label:
-        label = getLable(url)
-        print("Got the lable: " + label)
+        label = get_label_easy(url)
+        print("Got the label: " + label)
     for it in items:
         src = it.attr('src')
         if src.endswith('.jpg'):
@@ -35,13 +35,15 @@ def getPicUrl(url):
         cache_array = url.split('/')
         cache_array[len(cache_array) - 1] = next_page
         next_url = "/".join(cache_array)
-        getPicUrl(next_url)
+        get_pic_url_list(next_url)
 
     return article_title, pic_list
 
 
-def getLable(url):
+def get_label(url):
     cache_array = url.split('/')
+    cache_array.pop(0)
+    cache_array.pop()
     year = ''
     month = ''
     for ele in cache_array:
@@ -51,5 +53,15 @@ def getLable(url):
 
         mon_res = re.search('(?P<mon>[0-1][0-9][0-3][0-9])', ele)
         if mon_res:
-            month = mon_res.groupdict("mon").get('mon')
+            temp = mon_res.groupdict("mon").get('mon')
+            if int(temp) <= 1231:
+                month = temp
+    return year[2:] + month
+
+
+def get_label_easy(url):
+    cache_array = url.split('/')
+    cache_array.pop()
+    month = cache_array.pop()
+    year = cache_array.pop()
     return year[2:] + month

@@ -8,37 +8,7 @@ import site177
 import time
 import requests
 from common import socks_proxy
-
-parser = argparse.ArgumentParser(description='manual to this script')
-parser.add_argument('--bu', type=str, default=None)
-parser.add_argument('--folder', type=str, default=None)
-parser.add_argument('--proxy', type=bool, default=True)
-args = parser.parse_args()
-
-
-proxies = {'http': 'socks5://localhost:58080', 'https': 'socks5://localhost:58080'}
-
-base_url = 'http://www.177pic.info/html/2016/12/1287498.html'
-base_folder = 'D:\\Download\\'
-finished_number = 0
-
-if args.bu:
-    base_url = args.bu
-    print("Use argument input as base url.")
-else:
-    print("No argument use as base url.")
-
-if args.folder:
-    base_folder = args.folder
-    print("Use argument input as base folder.")
-else:
-    print("No argument use as base folder.")
-
-separator = "\\"
-sysType = sys.platform[0:3]
-if sysType == "lin":
-    print("Current platform is " + sysType)
-    separator = "/"
+import siteZFL
 
 
 def mkdir(path):
@@ -75,14 +45,43 @@ def download_pic(pic_urls, saved_folder):
         pic_urls.remove(pic)
 
 
-tittle, pic_url_list = site177.get_pic_url_list(base_url)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='manual to this script')
+    parser.add_argument('--bu', type=str, default=None)
+    parser.add_argument('--folder', type=str, default=None)
+    parser.add_argument('--proxy', type=bool, default=False)
+    args = parser.parse_args()
 
-while pic_url_list:
-    print('%d pictures will be downloaded.' % len(pic_url_list))
-    try:
-        download_pic(pic_url_list, tittle)
-    except requests.ConnectionError:
-        print('meet network issue.')
-        time.sleep(10)
+    if args.bu:
+        base_url = args.bu
+        print("Use argument input as base url.")
+    else:
+        base_url = 'https://qqkj52.com/luyilu/2015/0630/1714.html'
+        print("No argument use as base url.")
 
-print("Jobs done!")
+    if args.folder:
+        base_folder = args.folder
+        print("Use argument input as base folder.")
+    else:
+        base_folder = 'D:\\Download\\'
+        print("No argument use as base folder.")
+
+    separator = "\\"
+    sysType = sys.platform[0:3]
+    if sysType == "lin":
+        print("Current platform is " + sysType)
+        separator = "/"
+
+    proxies = {'http': 'socks5://localhost:58080', 'https': 'socks5://localhost:58080'}
+
+    tittle, pic_url_list = siteZFL.get_pic_url_list(base_url)
+
+    while pic_url_list:
+        print('%d pictures will be downloaded.' % len(pic_url_list))
+        try:
+            download_pic(pic_url_list, tittle)
+        except requests.ConnectionError:
+            print('meet network issue.')
+            time.sleep(10)
+
+    print("Jobs done!")
