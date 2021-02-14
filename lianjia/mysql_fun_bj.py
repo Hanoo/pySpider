@@ -1,10 +1,12 @@
 import pymysql
+import logging
+logging.basicConfig(level=logging.INFO)
 
 # db_host = '10.10.66.102'
 # db_port = 8306
 # db_user = 'crosdev'
 # db_password = 'crosdev'
-db_name = 'lianjia'
+db_name = 'lianjia1'
 db_charset = 'utf8mb4'
 db_host = '127.0.0.1'
 db_port = 3306
@@ -84,6 +86,7 @@ def insert_partition():
     conn.close()
     print (rows)
 
+
 def insert_community(commu_list):
     conn = pymysql.connect(host=db_host, port=db_port, user=db_user,
                            password=db_password, db=db_name, charset=db_charset)
@@ -150,6 +153,44 @@ def insert_batch_apartment(apartment_list, table_name_suffix):
         return rows
 
 
+def apartment_insert_full(apartment_list, table_name_suffix):
+    if not isinstance(apartment_list, list) or len(apartment_list) == 0:
+        return
+    else:
+        conn = pymysql.connect(host=db_host, port=db_port, user=db_user,
+                                password=db_password, db=db_name, charset=db_charset)
+        cursor = conn.cursor()
+        sql = 'INSERT INTO apartment_bj_%s' % table_name_suffix
+        sql += ' (direct_name, partition_name, community_name, chengjiaoshijian, chengjiaojiage, guapaijiage,' \
+               ' chengjiaozhouqi, fangwuhuxing, suozailouceng, jianzhumianji, huxingjiegou, jianzhuleixing,' \
+               ' fangwuchaoxiang, jianchengniandai, zhuangxiuqingkuang, jianzhujiegou, gongnuanfangshi,' \
+               ' tihubili, peibeidianti, jiaoyiquanshu, guapaishijian, fangwuyongtu, fangwunianxian, fangquansuoshu,' \
+               ' detail_url) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s' \
+               ', %s, %s, %s, %s, %s)'
+        price_per_sm = apartment_list.pop(6)  # 平米均价
+        try:
+            cursor.execute(sql, tuple(apartment_list))
+            row_id = cursor.lastrowid
+            # 提交
+            conn.commit()
+
+            date_info = apartment_list[3].split('.')
+            date_in_format = date_info[0] + '-' + date_info[1]
+            sql_add_trans_record = 'insert into apartment_trans_record_bj_%s' % table_name_suffix
+            sql_add_trans_record += '(apartment_id, record_price, price_per_sm, record_time) values (%s, %s, %s, %s)'
+            cursor.execute(sql_add_trans_record, (row_id, str(apartment_list[4]) + '万', price_per_sm, date_in_format))
+
+            conn.commit()
+            return 1
+        except :
+            print('数据库连接错误')
+            conn.rollback()
+            return -1
+        finally:
+            cursor.close()
+            conn.close()
+
+
 # 更新分区表，写入分区准确的所属市区
 def update_partition_bj(partition_id, direct_name):
     conn = pymysql.connect(host=db_host, port=db_port, user=db_user,
@@ -189,6 +230,7 @@ def update_community_bj_for_finish(community_id, flag, total_count):
     conn.close()
 
     return rows
+
 
 def select_apartments(reverse, direct_name, d_name_py, page_size):
     conn = pymysql.connect(host=db_host, port=db_port, user=db_user,
@@ -377,7 +419,6 @@ def new_etl(d_name_py):
     conn_local.close()
 
 
-
 def select_all_apartments(d_name_py):
     conn = pymysql.connect(host=db_host, port=db_port, user=db_user,
                            password=db_password, db=db_name, charset=db_charset)
@@ -400,7 +441,8 @@ def select_trans_record_bj_by_apartment_id(d_name_py, apartment_id):
                            password=db_password, db=db_name, charset=db_charset)
 
     cursor = conn.cursor()
-    sql = 'select apartment_id, record_price, price_per_sm, record_time from apartment_trans_record_bj_%s where apartment_id=\'%s\'' % (d_name_py,apartment_id)
+    sql = 'select apartment_id, record_price, price_per_sm, record_time from apartment_trans_record_bj_%s where ' \
+          'apartment_id=\'%s\'' % (d_name_py, apartment_id)
 
     cursor.execute(sql)
     conn.commit()
@@ -493,5 +535,118 @@ def delete_apartment_by_community_name(table_name_suffix, community_name):
     return rows
 
 
-# if __name__ == "__main__":
-#     new_etl('chy')
+# 根据成交页的url进行查询
+def select_apartments_by_detail_url(detail_url, table_suffix):
+    conn = pymysql.connect(host=db_host, port=db_port, user=db_user,
+                           password=db_password, db=db_name, charset=db_charset)
+    cursor = conn.cursor()
+
+    apartment_fetch_sql = 'select id, detail_url, summary, community_name, chengjiaoshijian, chengjiaojiage, pingjunjiage, guapaijiage, chengjiaozhouqi, fangwuhuxing, ' \
+                          'suozailouceng, jianzhumianji, huxingjiegou, taoneimianji, jianzhuleixing, fangwuchaoxiang, jianchengniandai, ' \
+                          'zhuangxiuqingkuang, jianzhujiegou, gongnuanfangshi, tihubili, peibeidianti, lianjiabianhao, jiaoyiquanshu, ' \
+                          'guapaishijian, fangwuyongtu, fangwunianxian, fangquansuoshu from apartment_bj_%s where detail_url=\'%s\''\
+                          % (table_suffix, detail_url)
+    cursor.execute(apartment_fetch_sql)
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return cursor.fetchall()
+
+
+def insert_trans_record(table_suffix, record_list):
+    conn = pymysql.connect(host=db_host, port=db_port, user=db_user,
+                           password=db_password, db=db_name, charset=db_charset)
+
+    cursor = conn.cursor()
+    sql_add_trans_record = 'insert into apartment_trans_record_bj_%s' % table_suffix
+    sql_add_trans_record += '(apartment_id, record_price, price_per_sm, record_time) values (%s, %s, %s, %s)'
+    cursor.execute(sql_add_trans_record, record_list)
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+def dup_clean():
+    table_suffixes = ['xch']  # , 'chp', 'chy', 'ft', 'dch', 'dx', 'hd', 'xch']
+    conn = pymysql.connect(host=db_host, port=db_port, user=db_user,
+                           password=db_password, db=db_name, charset=db_charset)
+    cursor = conn.cursor()
+    for suffix in table_suffixes:
+        print('处理 %s 区的重复数据···' % suffix)
+        query_sql = 'select count(detail_url), detail_url from apartment_bj_%s group by detail_url having count(' \
+                    'detail_url) >1 limit 0,500' % suffix
+        cursor.execute(query_sql)
+        conn.commit()
+        dup_url_list = cursor.fetchall()
+        if len(dup_url_list)==0:
+            logging.info('已经处理完毕，程序退出')
+            break
+        del_count_sum = 0
+        for dup_url in dup_url_list:
+            del_count_sum += dup_url[0] - 1
+        logging.info('需要删除的记录数量为：%d' % del_count_sum)
+        count_sql = 'select count(id) from apartment_bj_%s' % suffix
+        cursor.execute(count_sql)
+        conn.commit()
+        count = cursor.fetchone()[0]
+        logging.info('删除前数据库记录数：%d' % count)
+        logging.info('理论上删除后数据库记录数：%d' % (count-del_count_sum))
+
+        del_apartment_list = []
+        for record in dup_url_list:
+            logging.debug('重复的url： %s' % record[1])
+            q_d_sql = 'select id, summary, direct_name, partition_name, community_name from apartment_bj_%s where ' \
+                      'detail_url=\'%s\'' % (suffix, record[1])
+            cursor.execute(q_d_sql)
+            conn.commit()
+            data_list = cursor.fetchall()
+
+            del_ids = []
+            record_count = record[0]
+            for data in data_list:
+                apartment_id = data[0]
+                summary = data[1]
+                # direct_name = data[2]
+                community_name = data[4]
+                if summary is None or community_name not in summary:
+                    logging.info('小区信息和摘要信息不符，加入待删除列表。')
+                    del_ids.append(str(apartment_id))
+
+            if len(del_ids) == 0:
+                logging.info('没有信息不符的记录，就把第二条以后的都删了')
+                for i in range(1, record_count):
+                    del_ids.append(str(data_list[i][0]))
+            elif len(del_ids) == record_count:
+                logging.info('竟然所有的小区名都跟摘要信息不符，没办法，留一条吧')
+                del_ids.pop()
+
+            logging.info('要删除的id数量：%d, 这一条url的数据量：%d' % (len(del_ids), record_count))
+
+            del_apartment_list.extend(del_ids)
+
+        del_id_str = ','.join(del_apartment_list)
+        try:
+            apartment_del_sql = 'delete from apartment_bj_%s where id in (%s)' % (suffix, del_id_str)
+            cursor.execute(apartment_del_sql)
+            conn.commit()
+            logging.debug('删除主表记录: %s' % apartment_del_sql)
+            trans_del_sql = 'delete from apartment_trans_record_bj_%s where apartment_id in (%s)' % (suffix, del_id_str)
+            cursor.execute(trans_del_sql)
+            conn.commit()
+            logging.debug('删除从表记录: %s' % trans_del_sql)
+        except Exception as err:
+            logging.error("Error for execute sql: %s" % err)
+            conn.rollback()
+            return -1
+        cursor.execute(count_sql)
+        conn.commit()
+        logging.info('删除后数据库记录数：%d' % cursor.fetchone())
+
+    cursor.close()
+    conn.close()
+
+
+if __name__ == "__main__":
+    for i in range(0, 3):
+        dup_clean()
