@@ -457,7 +457,8 @@ def select_all_trans_record(d_name_py):
                            password=db_password, db=db_name, charset=db_charset)
 
     cursor = conn.cursor()
-    sql = 'select apartment_id, record_price, price_per_sm, record_time from apartment_trans_record_bj_%s' % d_name_py
+    sql = 'select apartment_id, record_price, price_per_sm, record_time' \
+          ' from apartment_trans_record_bj_%s order by record_time desc' % d_name_py
 
     cursor.execute(sql)
     conn.commit()
@@ -486,12 +487,13 @@ def select_apartments_in_partition(d_name_py, partition_name):
                            password=db_password, db=db_name, charset=db_charset)
     cursor = conn.cursor()
 
-    apartment_fetch_sql = 'select id, detail_url, summary, community_name, chengjiaoshijian, chengjiaojiage, pingjunjiage, guapaijiage, chengjiaozhouqi, fangwuhuxing, ' \
-                          'suozailouceng, jianzhumianji, huxingjiegou, taoneimianji, jianzhuleixing, fangwuchaoxiang, jianchengniandai, ' \
-                          'zhuangxiuqingkuang, jianzhujiegou, gongnuanfangshi, tihubili, peibeidianti, lianjiabianhao, jiaoyiquanshu, ' \
-                          'guapaishijian, fangwuyongtu, fangwunianxian, fangquansuoshu from apartment_bj_%s where partition_name=\'%s\''\
-                          % (d_name_py, partition_name)
-    cursor.execute(apartment_fetch_sql)
+    sql = 'select id, detail_url, summary, community_name, chengjiaoshijian, pingjunjiage, chengjiaojiage,' \
+          ' fangwuhuxing, jianzhumianji, guapaijiage, chengjiaozhouqi, suozailouceng, huxingjiegou, taoneimianji,' \
+          ' jianzhuleixing, fangwuchaoxiang, jianchengniandai, zhuangxiuqingkuang, jianzhujiegou, gongnuanfangshi,' \
+          ' tihubili, peibeidianti, lianjiabianhao, jiaoyiquanshu, guapaishijian, fangwuyongtu, fangwunianxian,' \
+          ' fangquansuoshu from apartment_bj_%s where partition_name=\'%s\' order by chengjiaoshijian desc'\
+          % (d_name_py, partition_name)
+    cursor.execute(sql)
     conn.commit()
     cursor.close()
     conn.close()

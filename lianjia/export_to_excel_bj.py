@@ -1,7 +1,10 @@
 import os
 
 import xlwt
+import datetime
+import time
 from lianjia import mysql_fun_bj
+
 
 def gen_xlwt_in_direct_and_partition(d_name_py, partition_name, apartment_id_records_mapping, directory):
     wb = xlwt.Workbook()
@@ -13,13 +16,13 @@ def gen_xlwt_in_direct_and_partition(d_name_py, partition_name, apartment_id_rec
     ws.write(0, 1, '摘要')
     ws.write(0, 2, '社区名称')
     ws.write(0, 3, '成交时间')
-    ws.write(0, 4, '成交价格(万元)')
-    ws.write(0, 5, '平均价格（元）')
-    ws.write(0, 6, '挂牌价格（万元）')
-    ws.write(0, 7, '成交周期（天）')
-    ws.write(0, 8, '房屋户型')
-    ws.write(0, 9, '所在楼层')
-    ws.write(0, 10, '建筑面积')
+    ws.write(0, 4, '单价（元）')
+    ws.write(0, 5, '成交价格(万元)')
+    ws.write(0, 6, '房屋户型')
+    ws.write(0, 7, '建筑面积')
+    ws.write(0, 8, '挂牌价格（万元）')
+    ws.write(0, 9, '成交周期（天）')
+    ws.write(0, 10, '所在楼层')
     ws.write(0, 11, '户型结构')
     ws.write(0, 12, '套内面积')
     ws.write(0, 13, '建筑类型')
@@ -37,24 +40,39 @@ def gen_xlwt_in_direct_and_partition(d_name_py, partition_name, apartment_id_rec
     ws.write(0, 25, '房屋年限')
     ws.write(0, 26, '房权所属')
     ws.write(0, 27, '历史成交价格')
-    ws.write(0, 28, '成交时间')
+    ws.write(0, 28, '平均价格')
+    ws.write(0, 29, '成交时间')
 
     max_trans_time = 1
 
     apartment_list = mysql_fun_bj.select_apartments_in_partition(d_name_py, partition_name)
 
-
+    datastyle = xlwt.XFStyle()
+    datastyle.num_format_str = 'yyyy年mm月'
     row_num = 1
     for apartment in apartment_list:
 
-        for column_num in range(len(apartment)):
-            if column_num != 0:
-                ws.write(row_num, column_num-1, apartment[column_num])
-
         apartment_id = apartment[0]
         according_record = apartment_id_records_mapping[apartment_id]
+        for column_num in range(len(apartment)):
+            if column_num != 0:
+                fillings = apartment[column_num]
+                if column_num == 4:
+                    if len(fillings) > 7:
+                        datetime_p = datetime.datetime.strptime(fillings, '%Y.%m.%d')
+                        chengjiaoshijian = datetime_p.strftime('%Y年%m月')
+                    else:
+                        datetime_p = datetime.datetime.strptime(fillings, '%Y.%m')
+                        chengjiaoshijian = datetime_p.strftime('%Y年%m月')
+                    ws.write(row_num, column_num - 1, chengjiaoshijian, datastyle)
+                elif column_num == 5:
+                    last_trans = according_record[0]  # 取最新的一次交易作为单价
+                    ws.write(row_num, column_num - 1, last_trans[1])
+                else:
+                    ws.write(row_num, column_num-1, fillings)
+
         addition = len(according_record) - max_trans_time
-        if addition>0:
+        if addition > 0:
             for i in range(addition):
                 ws.write(0, 27+(max_trans_time+i)*3, '历史成交价格')
                 ws.write(0, 28+(max_trans_time+i)*3, '平均价格')
@@ -67,10 +85,12 @@ def gen_xlwt_in_direct_and_partition(d_name_py, partition_name, apartment_id_rec
             ws.write(row_num, 29+index*3, according_record[index][2])
 
         row_num += 1
-        print('写入的行数：%d' % row_num)
+        # print('写入的行数：%d' % row_num)
 
     # 保存excel文件
     wb.save('%s\\%s.xls' % (directory, partition_name))
+    print('%s 区的片区 %s 文件生成完毕，一共有记录：%d 条' % (d_name_py, partition_name, row_num))
+
 
 def main_fun(d_name_py, d_name):
     base_path = 'C:\\Users\\cyanks\\Desktop\\'
@@ -99,6 +119,17 @@ def main_fun(d_name_py, d_name):
 
 
 if __name__ == "__main__":
-    direct_name_py = 'chy'
-    direct_name = '朝阳'
-    main_fun(direct_name_py, direct_name)
+    direct_mapping = {
+        '昌平': 'chp',
+        '朝阳': 'chy',
+        '东城': 'dch',
+        '大兴': 'dx',
+        '丰台': "ft",
+        '海底': 'hd',
+        '通州': 'tzh',
+        '西城': 'xch'
+    }
+    for key in direct_mapping:
+        direct_name = key
+        direct_name_py = direct_mapping[key]
+        main_fun(direct_name_py, direct_name)
