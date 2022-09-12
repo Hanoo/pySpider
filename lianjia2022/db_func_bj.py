@@ -132,7 +132,7 @@ class DBOperateSet(object):
     def update_community_bj_2022_for_finish(self, community_id, flag, total_count):
         cursor = self.__conn.cursor()
         sql = 'update community_bj_2022 set finished=\'%d\', apartment_count=%d where id=\'%d\'' % (
-        flag, total_count, community_id)
+                                                                                        flag, total_count, community_id)
         rows = cursor.execute(sql)
         self.__conn.commit()
         cursor.close()
