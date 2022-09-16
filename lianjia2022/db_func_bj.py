@@ -139,7 +139,7 @@ class DBOperateSet(object):
 
         return rows
 
-    def select_apartments(self, reverse, direct_name, d_name_py, page_size):
+    def select_apartments(self, reverse, direct_name, table_name_suffix, page_size):
         if page_size > 1000:
             page_size = 1000
         cursor = self.__conn.cursor()
@@ -148,7 +148,7 @@ class DBOperateSet(object):
             condition += ' order by id desc '
 
         sql = 'select id, detail_url from apartment_bj_%s ' \
-              ' where chengjiaoshijian is null %s limit 0, %d' % (d_name_py, condition, page_size)
+              ' where chengjiaoshijian is null %s limit 0, %d' % (table_name_suffix, condition, page_size)
         cursor.execute(sql)
         self.__conn.commit()
         cursor.close()

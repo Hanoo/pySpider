@@ -10,7 +10,7 @@ class LogUtil:
     format = '%(asctime)s %(levelname)s: %(message)s'
     colors = {
         'DEBUG': 'cyan',
-        'INFO': 'blue',
+        'INFO': 'green',
         'WARNING': 'yellow',
         'ERROR': 'red',
         'CRITICAL': 'red,bg_white',

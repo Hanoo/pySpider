@@ -181,8 +181,8 @@ def fetch_apartment_info_and_update(url, apartment_id, d_name_py):
 
     # 获取成交价格和均价
     div_price = pq_doc('.price')
-    chengjiaojiage = div_price('.dealTotalPrice')('i').html()
-    pingjunjiage = div_price('b').text()
+    chengjiaojiage = '暂无价格'
+    pingjunjiage = '暂无'
     apartment_info_list.append(chengjiaojiage)
     apartment_info_list.append(pingjunjiage)
 
@@ -244,14 +244,15 @@ def fetch_apartment_info_and_update(url, apartment_id, d_name_py):
         return db_o.update_apartment(d_name_py, tuple(apartment_info_list), trans_record_list)
     else:
         LogUtil.info('当前房屋没有成交历史，可能是下架的或者没卖掉。%s' % apartment_id)
-        return -404
+        return -1024
 
 
 def fetch_apartment_info(reverse, d_name_py):
     # 从数据库取出成交详情
-    ret = db_o.select_apartments(reverse, direct_name, d_name_py, 100)
+    ret = db_o.select_apartments(reverse, direct_name, d_name_py, 1000)
     pedometer = 1
     if len(ret) == 0:
+        LogUtil.warn('当前查询已经没有数据，本次执行完成！')
         return 0
     for apartment in ret:
         apartment_id = apartment[0]
@@ -259,9 +260,11 @@ def fetch_apartment_info(reverse, d_name_py):
 
         ret = fetch_apartment_info_and_update(apartment_url, apartment_id, d_name_py)
         if ret > 0:
-            sleep_sec = 1.8
-            LogUtil.info('ID：%d执行成功，休息%0.2f秒' % (apartment_id, sleep_sec))
+            sleep_sec = 1
+            LogUtil.info('ID：%s 执行成功，休息%0.1f秒' % (apartment_url, sleep_sec))
             time.sleep(sleep_sec)
+            LogUtil.debug('循环计数器：%d' % pedometer)
+            pedometer += 1
         elif ret == -1024:
             LogUtil.info('页面内找不到交易历史，删除对应房屋信息：%d' % apartment_id)
             db_o.del_apartment_by_id(d_name_py, apartment_id)
@@ -269,7 +272,6 @@ def fetch_apartment_info(reverse, d_name_py):
             return -500
         else:
             LogUtil.info('有异常导致插入出错！出错URL:%s' % apartment_url)
-        pedometer += 1
     db_o.before_quit()
     return 1
 
@@ -279,17 +281,17 @@ if __name__ == "__main__":
     LogUtil.init('crawl.log', console=True)
     time_sec = time.time()
 
-    user_name = '15600280105'
-    password = 'happy999'
+    # user_name = '15600280105'
+    # password = 'happy999'
     # user_name = '13810954447'
     # password = 'symbol28'
-    # user_name = '18510515447'
-    # password = 'symbol28'
+    user_name = '18510515447'
+    password = 'symbol28'
     # 首页地址
     index_url = 'https://bj.lianjia.com/'
     apartment_list_url = index_url + 'chengjiao/pg1rs%E5%B0%8F%E5%8D%97%E5%BA%84%E7%A4%BE%E5%8C%BA/'
-    direct_name = '朝阳'
-    table_name_suffix = 'chy_2022'
+    direct_name = '海淀'
+    table_name_suffix = 'hd_2022'
     interval = [2.5, 6, 3, 6, 5, 4, 2, 6, 3, 5.5]
     page_size = 100  # 每次查询的集合长度
 
@@ -299,7 +301,8 @@ if __name__ == "__main__":
     sbj = SpiderBJ()
     sbj.login()
     time.sleep(5)
-    crawl_resolve_community()
+    # crawl_resolve_community()
+    fetch_apartment_info(False, table_name_suffix)
     sbj.terminal()
     time_arrived = time.time()
     LogUtil.info('本次执行耗时：%0.2f秒' % (time_arrived - time_open))
